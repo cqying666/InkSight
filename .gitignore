@@ -44,6 +44,7 @@ lerna-debug.log*
 # ===== TypeScript 增量缓存 =====
 *.tsbuildinfo
 
-# ===== 测试覆盖率 =====
+# ===== 测试覆盖率与产物 =====
 coverage/
 .nyc_output/
+tests/consistency-report.json
