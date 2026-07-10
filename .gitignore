@@ -48,3 +48,14 @@ lerna-debug.log*
 coverage/
 .nyc_output/
 tests/consistency-report.json
+
+# ===== 运行时生成数据（拆文输出、分析结果快照）=====
+拆文库/
+analysis.json
+
+# ===== 设计参考截图与素材（不入仓库）=====
+screenshots/
+
+# ===== 技能/工具内部元数据 =====
+.roundtable-memory/
+.skill-harness/
