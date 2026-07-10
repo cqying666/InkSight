@@ -78,14 +78,58 @@ export type FeedbackInput = z.infer<typeof FeedbackInputSchema>;
  */
 export async function runFeedbackPipeline(
   input: FeedbackInput,
-  options: { prescriptionTimeout?: number } = {}
+  options: {
+    prescriptionTimeout?: number;
+    /** P6-T9 类型识别+拆解超时毫秒数（默认 30000，防极端长尾） */
+    teardownTimeout?: number;
+  } = {}
 ): Promise<FeedbackResult> {
   const startTime = Date.now();
-  const { prescriptionTimeout = 30_000 } = options;
+  // 推理模型（如 deepseek-v4-flash）含 reasoning 阶段，拆解+处方均需更长超时
+  const { prescriptionTimeout = 90_000, teardownTimeout = 120_000 } = options;
 
-  // ===== Step 1: 类型识别 + 拆解（合并执行） =====
-  const typeResult = await detectNovelType(input.text);
-  const teardownResult = await teardownNovel(input.text);
+  /**
+   * P6-T9 通用 race timeout 包装
+   * 防止 LLM 调用极端长尾（maxRetries=0 后仍可能因网络/服务端问题挂起）
+   * 定时器在 race 结束后清理，避免泄漏与未处理拒绝
+   */
+  async function withTimeout<T>(
+    promise: Promise<T>,
+    ms: number,
+    label: string
+  ): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`${label}超时（${ms}ms）`)),
+        ms
+      );
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  // ===== Step 1: 类型识别 + 拆解（先识别类型，再带类型拆解） =====
+  // P6-T9: 加 race timeout 防止极端长尾（LLM client maxRetries=0 后仍可能挂起）
+  let typeResult, teardownResult;
+  try {
+    typeResult = await withTimeout(
+      detectNovelType(input.text),
+      teardownTimeout,
+      "类型识别"
+    );
+    teardownResult = await withTimeout(
+      teardownNovel(input.text, typeResult.type),
+      teardownTimeout,
+      "结构拆解"
+    );
+  } catch (err) {
+    // 拆解失败是致命的，无法降级（诊断/处方都依赖拆解结果）
+    throw err;
+  }
 
   const teardown: TeardownResult = teardownResult.data;
   const type = typeResult;
@@ -113,19 +157,11 @@ export async function runFeedbackPipeline(
     prescription = { status: "skipped" };
   } else {
     try {
-      // 用 Promise.race 实现超时控制
-      const prescriptionPromise = generatePrescription(teardown, diagnosis);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`处方生成超时（${prescriptionTimeout}ms）`)),
-          prescriptionTimeout
-        )
+      const prescriptionResult = await withTimeout(
+        generatePrescription(teardown, diagnosis),
+        prescriptionTimeout,
+        "处方生成"
       );
-
-      const prescriptionResult = await Promise.race([
-        prescriptionPromise,
-        timeoutPromise,
-      ]);
 
       prescription = {
         status: "loaded",

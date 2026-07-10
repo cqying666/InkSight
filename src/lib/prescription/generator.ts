@@ -138,7 +138,7 @@ ${weaknessesInfo}
 1. 严格遵循"三不原则"
 2. 每个薄弱点给出 2-3 个**不同**方向的建议
 3. 建议要适配这部小说的风格特征
-4. 输出合法 JSON 数组，不要包含 markdown 代码块或额外文字`;
+4. 输出合法 JSON 数组（即使只有一个薄弱点，也必须用 [] 包裹），不要包含 markdown 代码块或额外文字`;
 }
 
 // ===== 处方生成主函数 =====
@@ -162,7 +162,15 @@ export async function generatePrescription(
     temperature: 0.5, // 处方需要一定创造性，温度稍高
     jsonMode: true,
     maxAttempts: 2,
-    validate: (parsed) => PrescriptionSchema.safeParse(parsed),
+    validate: (parsed) => {
+      // LLM 在仅一个薄弱点时常返回单对象而非数组，做归一化
+      const normalized = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === "object" && "weaknessLabel" in parsed
+        ? [parsed]
+        : parsed;
+      return PrescriptionSchema.safeParse(normalized);
+    },
   });
 
   return {

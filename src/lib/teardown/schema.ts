@@ -9,23 +9,70 @@ import { z } from "zod";
  */
 
 /**
- * 比例字段容错：LLM 可能输出 0-1 小数或 0-100 百分比，统一归一化为 0-1
- * 用 coerce 接受字符串形式的数字（如 "0.6"）
+ * 比例字段容错：LLM 可能输出 0-1 小数、0-100 百分比、或非数字字符串（如描述性文字）
+ * 用 z.any() 接受任意输入，手动 Number() 转换
+ * 注意：不能用 z.coerce.number()，因为它在转出 NaN 后会被 Zod number 类型拒绝
+ * （报 "Expected number, received nan"），transform 没机会执行
+ * NaN（如 "N/A"、null、描述性文字）回退为 0
  */
 const ratioField = (description: string) =>
-  z.coerce
-    .number()
+  z
+    .any()
     .describe(description)
-    .transform((v) => {
+    .transform((raw) => {
+      const v = Number(raw);
+      if (Number.isNaN(v)) return 0;
       if (v > 1) return v / 100;
       if (v < 0) return 0;
       return v;
     });
 
 /**
- * 普通数值字段：用 coerce 接受字符串形式
+ * 普通数值字段：接受任意输入，NaN 回退为 0
  */
-const numField = (description: string) => z.coerce.number().describe(description);
+const numField = (description: string) =>
+  z
+    .any()
+    .describe(description)
+    .transform((raw) => {
+      const v = Number(raw);
+      return Number.isNaN(v) ? 0 : v;
+    });
+
+/**
+ * 容错枚举字段：LLM 可能输出中文、近义词、null 或带多余文字，统一映射到规范值
+ * 未命中映射时回退到 fallback（默认 mixed/首个值）
+ */
+function tolerantEnum<T extends string>(
+  values: readonly T[],
+  aliases: Record<string, T>,
+  description: string,
+  fallback?: T
+): z.ZodEffects<z.ZodAny, T, unknown> {
+  const lowerAliases: Record<string, T> = {};
+  for (const [k, v] of Object.entries(aliases)) lowerAliases[k.toLowerCase()] = v;
+  const valueSet = new Set(values);
+  const fb = fallback ?? values[0];
+  return z
+    .any()
+    .describe(description)
+    .transform((raw) => {
+      const s = String(raw ?? "").trim().toLowerCase();
+      // 1. 直接命中规范值
+      if (valueSet.has(s as T)) return s as T;
+      // 2. 命中别名映射
+      if (lowerAliases[s]) return lowerAliases[s];
+      // 3. 子串包含匹配（LLM 可能输出 "情节反转(plot)" 等）
+      for (const [alias, canonical] of Object.entries(lowerAliases)) {
+        if (s.includes(alias)) return canonical;
+      }
+      // 4. 规范值作为子串出现
+      for (const v of values) {
+        if (s.includes(v.toLowerCase())) return v;
+      }
+      return fb;
+    });
+}
 
 // ===== 骨架层 =====
 
@@ -40,7 +87,32 @@ export const HookType = z.enum([
 
 export const SkeletonLayer = z.object({
   // 1. 开头钩子
-  hookType: HookType,
+  hookType: tolerantEnum(
+    ["suspense", "action", "character", "atmosphere", "dialogue", "mixed"] as const,
+    {
+      suspense: "suspense",
+      悬念: "suspense",
+      悬念型: "suspense",
+      action: "action",
+      动作: "action",
+      动作型: "action",
+      character: "character",
+      人物: "character",
+      人物型: "character",
+      角色型: "character",
+      atmosphere: "atmosphere",
+      氛围: "atmosphere",
+      氛围型: "atmosphere",
+      dialogue: "dialogue",
+      对话: "dialogue",
+      对话型: "dialogue",
+      mixed: "mixed",
+      混合: "mixed",
+      混合型: "mixed",
+    },
+    "钩子类型",
+    "mixed"
+  ),
   hookStrength: numField("钩子强度 0-5"),
   hookEvidence: z.string().describe("原文开头 200 字内证据引用"),
   hookAnalysis: z.string().describe("钩子效果分析"),
@@ -56,20 +128,53 @@ export const SkeletonLayer = z.object({
   reversals: z.array(
     z.object({
       position: ratioField("反转位置 0-1（全文占比）"),
-      type: z.enum(["plot", "cognition", "emotion"]).describe("情节反转/认知反转/情感反转"),
+      type: tolerantEnum(
+        ["plot", "cognition", "emotion"] as const,
+        {
+          情节: "plot",
+          情节反转: "plot",
+          plot: "plot",
+          认知: "cognition",
+          认知反转: "cognition",
+          视角: "cognition",
+          cognition: "cognition",
+          情感: "emotion",
+          情感反转: "emotion",
+          情绪: "emotion",
+          emotion: "emotion",
+        },
+        "情节反转/认知反转/情感反转",
+        "plot"
+      ),
       description: z.string().describe("反转内容描述"),
     })
   ),
 
   // 4. 结局类型
-  endingType: z.enum([
-    "twist", // 反转结局
-    "open", // 开放结局
-    "circular", // 环形结局
-    "tragic", // 悲剧结局
-    "happy", // 圆满结局
-    "ambiguous", // 模糊结局
-  ]),
+  endingType: tolerantEnum(
+    ["twist", "open", "circular", "tragic", "happy", "ambiguous"] as const,
+    {
+      twist: "twist",
+      反转: "twist",
+      反转结局: "twist",
+      意外: "twist",
+      open: "open",
+      开放: "open",
+      开放结局: "open",
+      circular: "circular",
+      环形: "circular",
+      循环: "circular",
+      tragic: "tragic",
+      悲剧: "tragic",
+      happy: "happy",
+      圆满: "happy",
+      喜剧: "happy",
+      ambiguous: "ambiguous",
+      模糊: "ambiguous",
+      开放性: "open",
+    },
+    "结局类型"
+  ),
   endingAnalysis: z.string().describe("结局效果分析"),
 
   // 5. 事件密度
@@ -81,16 +186,23 @@ export const SkeletonLayer = z.object({
 
 export const EmotionCurvePoint = z.object({
   position: ratioField("位置 0-1"),
-  emotion: z.coerce.number().min(-5).max(5).describe("情绪值 -5 到 +5"),
+  emotion: z
+    .any()
+    .describe("情绪值 -5 到 +5")
+    .transform((raw) => {
+      const v = Number(raw);
+      if (Number.isNaN(v)) return 0;
+      return Math.max(-5, Math.min(5, v));
+    }),
   label: z.string().describe("情绪标签"),
 });
 
 export const FleshLayer = z.object({
   // 6. 情绪曲线
-  emotionCurve: z.array(EmotionCurvePoint).min(5).describe("情绪曲线关键点，至少 5 个"),
+  emotionCurve: z.array(EmotionCurvePoint).min(3).describe("情绪曲线关键点"),
   emotionRange: z.object({
-    min: z.number(),
-    max: z.number(),
+    min: numField("情绪最低值"),
+    max: numField("情绪最高值"),
   }),
   emotionTrend: z.string().describe("情绪走势描述"),
 
@@ -139,23 +251,92 @@ export const StyleLayer = z.object({
 
   // 12. 用词偏好
   wordPreference: z.object({
-    formality: z.enum(["formal", "neutral", "colloquial"]),
-    imagery: z.enum(["concrete", "balanced", "abstract"]),
+    formality: tolerantEnum(
+      ["formal", "neutral", "colloquial"] as const,
+      {
+        formal: "formal",
+        正式: "formal",
+        书面: "formal",
+        neutral: "neutral",
+        中性: "neutral",
+        平衡: "neutral",
+        colloquial: "colloquial",
+        口语: "colloquial",
+        口语化: "colloquial",
+        通俗: "colloquial",
+      },
+      "正式/中性/口语",
+      "neutral"
+    ),
+    imagery: tolerantEnum(
+      ["concrete", "balanced", "abstract"] as const,
+      {
+        concrete: "concrete",
+        具体: "concrete",
+        具象: "concrete",
+        balanced: "balanced",
+        平衡: "balanced",
+        均衡: "balanced",
+        abstract: "abstract",
+        抽象: "abstract",
+      },
+      "具体/平衡/抽象",
+      "balanced"
+    ),
     keyword: z.array(z.string()).describe("高频特色用词 Top 5"),
   }),
 
   // 13. 视角分析
-  perspective: z.enum([
-    "first", // 第一人称
-    "second", // 第二人称
-    "third-limited", // 第三人称有限
-    "third-omniscient", // 第三人称全知
-    "mixed", // 混合视角
-  ]),
+  perspective: tolerantEnum(
+    ["first", "second", "third-limited", "third-omniscient", "mixed"] as const,
+    {
+      first: "first",
+      "first-person": "first",
+      第一人称: "first",
+      "1st": "first",
+      second: "second",
+      "second-person": "second",
+      第二人称: "second",
+      "2nd": "second",
+      "third-limited": "third-limited",
+      "third-limited-person": "third-limited",
+      "thirdlimited": "third-limited",
+      第三人称有限: "third-limited",
+      第三人称限制: "third-limited",
+      有限第三人称: "third-limited",
+      "third-omniscient": "third-omniscient",
+      "third-omniscient-person": "third-omniscient",
+      thirdomniscient: "third-omniscient",
+      第三人称全知: "third-omniscient",
+      全知第三人称: "third-omniscient",
+      第三人称: "third-limited",
+      third: "third-limited",
+      mixed: "mixed",
+      混合: "mixed",
+      混合视角: "mixed",
+    },
+    "叙事视角",
+    "mixed"
+  ),
   perspectiveAnalysis: z.string().describe("视角效果分析"),
 
   // 14. 叙事时态
-  tense: z.enum(["past", "present", "mixed"]),
+  tense: tolerantEnum(
+    ["past", "present", "mixed"] as const,
+    {
+      past: "past",
+      过去时: "past",
+      过去: "past",
+      present: "present",
+      现在时: "present",
+      现在: "present",
+      mixed: "mixed",
+      混合: "mixed",
+      混合时态: "mixed",
+    },
+    "叙事时态",
+    "mixed"
+  ),
   tenseAnalysis: z.string().describe("时态效果分析"),
 });
 
@@ -170,8 +351,36 @@ export const NovelType = z.enum([
 
 export const TeardownSchema = z.object({
   // 元信息
-  type: NovelType,
-  typeConfidence: z.coerce.number().min(0).max(1).describe("类型识别置信度 0-1"),
+  type: tolerantEnum(
+    ["plot-driven", "emotion-driven", "atmosphere-driven", "mixed"] as const,
+    {
+      "plot-driven": "plot-driven",
+      plotdriven: "plot-driven",
+      情节驱动: "plot-driven",
+      情节驱动型: "plot-driven",
+      "emotion-driven": "emotion-driven",
+      emotiondriven: "emotion-driven",
+      情感驱动: "emotion-driven",
+      情感驱动型: "emotion-driven",
+      "atmosphere-driven": "atmosphere-driven",
+      atmospheredriven: "atmosphere-driven",
+      氛围驱动: "atmosphere-driven",
+      氛围驱动型: "atmosphere-driven",
+      mixed: "mixed",
+      混合: "mixed",
+      混合型: "mixed",
+    },
+    "小说类型",
+    "mixed"
+  ),
+  typeConfidence: z
+    .any()
+    .describe("类型识别置信度 0-1")
+    .transform((raw) => {
+      const v = Number(raw);
+      if (Number.isNaN(v)) return 0;
+      return Math.max(0, Math.min(1, v));
+    }),
   wordCount: numField("总字数"),
   paragraphCount: numField("总段落数"),
 
@@ -184,8 +393,7 @@ export const TeardownSchema = z.object({
   summary: z.string().describe("一句话总评"),
   keyFindings: z
     .array(z.string())
-    .min(1)
-    .max(3)
+    .transform((arr) => arr.slice(0, 3))
     .describe("1-3 个核心发现"),
 });
 
