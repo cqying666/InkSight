@@ -3,31 +3,146 @@
 @tailwind utilities;
 
 :root {
-  --color-seal: #8B2635;
-  --color-gold: #A87E3B;
-  --color-ink: #1A1614;
-  --color-ivory: #F5F0E8;
-  --color-paper: #FAF6EF;
+  /* InkSight Design System v3.0 — Editorial Paper + Cinnabar */
+  --color-primary: #1C1C1E;
+  --color-text: #1C1C1E;
+  --color-text-muted: #6B665E;
+  --color-bg: #FDFCFA;
+  --color-bg-alt: #FFFFFF;
+  --color-bg-soft: #FAF7F2;
+  --color-bg-elevated: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #F8F6F1;
+
+  --color-accent: #9C4B3C;
+  --color-accent-soft: #F3E3DD;
+  --color-accent-muted: #D4A89A;
+  --color-accent-warm: #7C6F66;
+
+  /* 旧色名兼容（逐步迁移中） */
+  --color-seal: #1C1C1E;
+  --color-gold: #7C6F66;
+  --color-ink: #1C1C1E;
+  --color-ivory: #FFFFFF;
+  --color-paper: #FDFCFA;
 }
 
 body {
-  background-color: var(--color-paper);
-  color: var(--color-ink);
+  background-color: var(--color-bg);
+  color: var(--color-text);
   font-family: "Inter", "Noto Sans SC", sans-serif;
+}
+
+/* ===== 工作台聚焦态 / 动效降级（Web Interface Guidelines）===== */
+/* 交互元素可见聚焦态：覆盖侧栏、抽屉、顶栏及工作台内页面 */
+.workspace-shell a:focus-visible,
+.workspace-shell button:focus-visible,
+.workspace-shell [role="tab"]:focus-visible {
+  outline: 2px solid rgba(28, 28, 30, 0.35);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 落地页链接聚焦态 */
+.landing-shell a:focus-visible {
+  outline: 2px solid rgba(28, 28, 30, 0.35);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* 教练回复淡入 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 尊重 prefers-reduced-motion：降级工作台内所有过渡/动画 */
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell *,
+  .workspace-shell *::before,
+  .workspace-shell *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* 滚动条美化 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4c5b0;
+  background: #c4b9a8;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-gold);
+  background: var(--color-accent);
+}
+
+/* ===== Demo 编辑器占位文字 ===== */
+.write-editor:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(107, 102, 94, 0.4);
+  pointer-events: none;
+}
+
+/* ===== 打印样式（P3-T5 报告导出 PDF）===== */
+/* 配合 window.print()，用户在打印对话框选"保存为 PDF" */
+@media print {
+  /* 强制白色背景 + 深色文字，确保打印可读 */
+  body {
+    background: #ffffff !important;
+    color: var(--color-text) !important;
+    font-size: 11pt;
+  }
+
+  /* 页面边距：A4 适配 */
+  @page {
+    margin: 1.5cm 2cm;
+  }
+
+  /* 隐藏所有标记 no-print 的元素（按钮/导航/评分/交互控件）*/
+  .no-print {
+    display: none !important;
+  }
+
+  /* 报告主容器：去除最大宽度和内边距限制，铺满打印页 */
+  .report-print-area {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 避免关键区块跨页断裂 */
+  .avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* 可视化区域：单列布局，避免并排被截断 */
+  .print-stack {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 原文联动区：限制高度避免占满整页，保留滚动但打印时展开 */
+  .print-expand {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* 链接去掉颜色，统一深色 */
+  a {
+    color: #1C1C1E !important;
+    text-decoration: none !important;
+  }
 }
