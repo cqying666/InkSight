@@ -26,8 +26,10 @@ function getClient(): OpenAI {
   client = new OpenAI({
     apiKey,
     baseURL: process.env.LLM_BASE_URL || DEFAULT_BASE_URL,
-    timeout: 60_000, // 60 秒超时
-    maxRetries: 1, // 失败重试 1 次
+    timeout: 300_000, // 300 秒超时（拆文/人设提示词复杂，JSON 输出耗时较长）
+    // SDK 层不重试：callLLMWithSchema 已有 maxAttempts=2 的 schema 错误重试
+    // 避免 SDK 重试 × schema 重试叠加导致最坏 4 次调用
+    maxRetries: 0,
   });
 
   return client;
@@ -44,8 +46,10 @@ export interface LLMCallOptions {
   jsonMode?: boolean;
   /** 温度，默认 0.3（拆解需稳定，处方可稍高） */
   temperature?: number;
-  /** 超时毫秒，默认 60000 */
+  /** 超时毫秒，默认 300000 */
   timeout?: number;
+  /** 最大输出 token 数，默认 8192（拆文/人设 JSON 较大，需放开） */
+  maxTokens?: number;
 }
 
 export interface LLMCallResult {
@@ -73,7 +77,8 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     userPrompt,
     jsonMode = false,
     temperature = 0.3,
-    timeout = 60_000,
+    timeout = 300_000,
+    maxTokens = 8192,
   } = options;
 
   const openai = getClient();
@@ -87,6 +92,7 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
       { role: "user", content: userPrompt },
     ],
     temperature,
+    max_tokens: maxTokens,
     ...(jsonMode
       ? { response_format: { type: "json_object" } }
       : {}),
@@ -153,10 +159,16 @@ export async function callLLMWithSchema<T>(
 
   let lastError = "";
   let lastRawContent = "";
+  const originalUserPrompt = llmOptions.userPrompt;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const raw = await callLLM({ ...llmOptions, jsonMode: true });
+      let currentPrompt = originalUserPrompt;
+      if (attempt > 1 && lastError) {
+        currentPrompt += `\n\n上一次输出存在以下问题，请严格修正后重新输出完整 JSON：\n${lastError}`;
+      }
+
+      const raw = await callLLM({ ...llmOptions, userPrompt: currentPrompt, jsonMode: true });
       lastRawContent = raw.content;
 
       if (!raw.parsed) {
@@ -170,12 +182,7 @@ export async function callLLMWithSchema<T>(
       }
 
       const errs = extractErrors(result);
-      lastError = `Schema 校验失败（第 ${attempt} 次）: ${errs.join("; ")}`;
-
-      // 校验失败时，在重试中把错误信息反馈给 LLM
-      if (attempt < maxAttempts) {
-        llmOptions.userPrompt += `\n\n上一次输出存在以下问题，请严格修正后重新输出完整 JSON：\n${errs.join("\n")}`;
-      }
+      lastError = errs.join("; ");
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }

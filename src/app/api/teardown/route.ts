@@ -1,28 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runFeedbackPipeline, FeedbackInputSchema } from "@/lib/feedback";
+import { AnalysisInputSchema, runAnalysisPipeline } from "@/lib/analysis";
 
 /**
- * 拆解分析 API（三步反馈管线）
+ * 拆文+人设分析 API
  * POST /api/teardown
  *
  * Body: {
- *   text: string,                          // 小说全文
- *   selfAssessment?: {                     // 可选自评
- *     hookRating?: 1-5,                    // 开头吸引力
- *     tensionPosition?: 0-1,               // 最有张力位置
- *     pace?: "fast"|"medium"|"slow"        // 整体节奏
- *   }
+ *   text: string  // 小说全文
  * }
  *
- * 返回：拆解 + 诊断 + 反直觉发现 + 处方（可能降级）
+ * 返回：拆文分析 + 人设分析（可降级）
  */
+
+// 拆文+人设提示词复杂，LLM 生成 JSON 耗时较长，放宽路由超时上限
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
     // 入参校验
-    const inputResult = FeedbackInputSchema.safeParse(body);
+    const inputResult = AnalysisInputSchema.safeParse(body);
     if (!inputResult.success) {
       return NextResponse.json(
         {
@@ -35,16 +33,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 执行三步反馈管线
-    const result = await runFeedbackPipeline(inputResult.data);
+    // 执行拆文+人设分析管线
+    const result = await runAnalysisPipeline(inputResult.data);
 
     return NextResponse.json({
       success: true,
-      teardown: result.teardown,
-      type: result.type,
-      diagnosis: result.diagnosis,
-      counterIntuitive: result.counterIntuitive,
-      prescription: result.prescription,
+      plot: result.plot,
+      character: result.character,
       meta: result.meta,
     });
   } catch (err) {
@@ -62,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "拆解失败", detail: message },
+      { error: "分析失败", detail: message },
       { status: 500 }
     );
   }
