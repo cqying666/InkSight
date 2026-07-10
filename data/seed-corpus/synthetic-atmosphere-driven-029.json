@@ -1,0 +1,104 @@
+{
+  "type": "atmosphere-driven",
+  "typeConfidence": 0.78,
+  "wordCount": 615,
+  "paragraphCount": 8,
+  "skeleton": {
+    "hookType": "action",
+    "hookStrength": 3.1,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 atmosphere-driven 钩子分析，强度 3.1",
+    "threeActRatio": {
+      "setup": 0.433,
+      "confrontation": 0.394,
+      "resolution": 0.173
+    },
+    "reversals": [],
+    "endingType": "open",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 2.1,
+    "eventDensityEvidence": "合成事件密度 2.1/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": -0.6,
+        "label": "震动"
+      },
+      {
+        "position": 0.25,
+        "emotion": 1.7,
+        "label": "失落"
+      },
+      {
+        "position": 0.5,
+        "emotion": 1.3,
+        "label": "震动"
+      },
+      {
+        "position": 0.75,
+        "emotion": -1.1,
+        "label": "颠覆"
+      },
+      {
+        "position": 1,
+        "emotion": -2.8,
+        "label": "恐惧"
+      }
+    ],
+    "emotionRange": {
+      "min": -2.8,
+      "max": 2
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.201,
+    "narrationRatio": 0.799,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 4.4,
+      "auditory": 2.7,
+      "tactile": 1.6,
+      "olfactory": 1.3,
+      "gustatory": 0.5
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.61
+    },
+    "conflictLayers": {
+      "interpersonal": 0.306,
+      "internal": 0.448,
+      "environmental": 0.246,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 29,
+      "shortSentenceRatio": 0.484,
+      "longSentenceRatio": 0.102,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "formal",
+      "imagery": "concrete",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 atmosphere-driven 种子 #29：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

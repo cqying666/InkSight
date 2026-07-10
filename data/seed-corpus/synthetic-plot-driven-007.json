@@ -1,0 +1,141 @@
+{
+  "type": "plot-driven",
+  "typeConfidence": 0.93,
+  "wordCount": 1282,
+  "paragraphCount": 16,
+  "skeleton": {
+    "hookType": "suspense",
+    "hookStrength": 3.5,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 plot-driven 钩子分析，强度 3.5",
+    "threeActRatio": {
+      "setup": 0.346,
+      "confrontation": 0.468,
+      "resolution": 0.186
+    },
+    "reversals": [
+      {
+        "position": 0.273,
+        "type": "cognition",
+        "description": "时间线错位揭露"
+      },
+      {
+        "position": 0.438,
+        "type": "cognition",
+        "description": "时间线错位揭露"
+      },
+      {
+        "position": 0.616,
+        "type": "emotion",
+        "description": "主角发现关键线索"
+      },
+      {
+        "position": 0.784,
+        "type": "emotion",
+        "description": "主角发现关键线索"
+      }
+    ],
+    "endingType": "twist",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 4.2,
+    "eventDensityEvidence": "合成事件密度 4.2/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": 0.3,
+        "label": "警觉"
+      },
+      {
+        "position": 0.143,
+        "emotion": 2.4,
+        "label": "平静"
+      },
+      {
+        "position": 0.286,
+        "emotion": 3.9,
+        "label": "警觉"
+      },
+      {
+        "position": 0.429,
+        "emotion": 3.7,
+        "label": "震动"
+      },
+      {
+        "position": 0.571,
+        "emotion": 2.2,
+        "label": "警觉"
+      },
+      {
+        "position": 0.714,
+        "emotion": -0.9,
+        "label": "震动"
+      },
+      {
+        "position": 0.857,
+        "emotion": -2.8,
+        "label": "警觉"
+      },
+      {
+        "position": 1,
+        "emotion": -3.3,
+        "label": "释然"
+      }
+    ],
+    "emotionRange": {
+      "min": -3.1,
+      "max": 3.6
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.5,
+    "narrationRatio": 0.5,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 2.3,
+      "auditory": 1.5,
+      "tactile": 1,
+      "olfactory": 0.5,
+      "gustatory": 0.2
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.595
+    },
+    "conflictLayers": {
+      "interpersonal": 0.565,
+      "internal": 0.21,
+      "environmental": 0.225,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 22,
+      "shortSentenceRatio": 0.41,
+      "longSentenceRatio": 0.122,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "formal",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜",
+        "回声"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 plot-driven 种子 #7：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

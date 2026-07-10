@@ -1,0 +1,125 @@
+{
+  "type": "plot-driven",
+  "typeConfidence": 0.81,
+  "wordCount": 1152,
+  "paragraphCount": 14,
+  "skeleton": {
+    "hookType": "suspense",
+    "hookStrength": 4.1,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 plot-driven 钩子分析，强度 4.1",
+    "threeActRatio": {
+      "setup": 0.358,
+      "confrontation": 0.479,
+      "resolution": 0.163
+    },
+    "reversals": [
+      {
+        "position": 0.26,
+        "type": "emotion",
+        "description": "主角发现关键线索"
+      },
+      {
+        "position": 0.49,
+        "type": "emotion",
+        "description": "主角认知崩塌"
+      },
+      {
+        "position": 0.727,
+        "type": "plot",
+        "description": "时间线错位揭露"
+      }
+    ],
+    "endingType": "open",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 4.2,
+    "eventDensityEvidence": "合成事件密度 4.2/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": -0.6,
+        "label": "警觉"
+      },
+      {
+        "position": 0.2,
+        "emotion": 3.1,
+        "label": "颠覆"
+      },
+      {
+        "position": 0.4,
+        "emotion": 4.1,
+        "label": "警觉"
+      },
+      {
+        "position": 0.6,
+        "emotion": 0.7,
+        "label": "怀疑"
+      },
+      {
+        "position": 0.8,
+        "emotion": -2.7,
+        "label": "失落"
+      },
+      {
+        "position": 1,
+        "emotion": -4.4,
+        "label": "颠覆"
+      }
+    ],
+    "emotionRange": {
+      "min": -4.4,
+      "max": 3.9
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.474,
+    "narrationRatio": 0.526,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 4.3,
+      "auditory": 2,
+      "tactile": 0.8,
+      "olfactory": 0.7,
+      "gustatory": 0.3
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.561
+    },
+    "conflictLayers": {
+      "interpersonal": 0.715,
+      "internal": 0.171,
+      "environmental": 0.114,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 17,
+      "shortSentenceRatio": 0.444,
+      "longSentenceRatio": 0.128,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "formal",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 plot-driven 种子 #0：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

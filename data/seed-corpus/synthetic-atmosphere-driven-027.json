@@ -1,0 +1,121 @@
+{
+  "type": "atmosphere-driven",
+  "typeConfidence": 0.85,
+  "wordCount": 1637,
+  "paragraphCount": 20,
+  "skeleton": {
+    "hookType": "dialogue",
+    "hookStrength": 2.9,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 atmosphere-driven 钩子分析，强度 2.9",
+    "threeActRatio": {
+      "setup": 0.391,
+      "confrontation": 0.375,
+      "resolution": 0.234
+    },
+    "reversals": [
+      {
+        "position": 0.24,
+        "type": "cognition",
+        "description": "主角认知崩塌"
+      },
+      {
+        "position": 0.59,
+        "type": "cognition",
+        "description": "真相与预期相反"
+      }
+    ],
+    "endingType": "twist",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 2.9,
+    "eventDensityEvidence": "合成事件密度 2.9/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": -0.6,
+        "label": "恐惧"
+      },
+      {
+        "position": 0.2,
+        "emotion": 1.6,
+        "label": "释然"
+      },
+      {
+        "position": 0.4,
+        "emotion": 1.3,
+        "label": "恐惧"
+      },
+      {
+        "position": 0.6,
+        "emotion": 0,
+        "label": "震动"
+      },
+      {
+        "position": 0.8,
+        "emotion": -1.6,
+        "label": "决意"
+      },
+      {
+        "position": 1,
+        "emotion": -2.2,
+        "label": "警觉"
+      }
+    ],
+    "emotionRange": {
+      "min": -2.3,
+      "max": 1.5
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.195,
+    "narrationRatio": 0.805,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 5.3,
+      "auditory": 2.8,
+      "tactile": 1.3,
+      "olfactory": 1.2,
+      "gustatory": 0.7
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.498
+    },
+    "conflictLayers": {
+      "interpersonal": 0.285,
+      "internal": 0.434,
+      "environmental": 0.281,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 32,
+      "shortSentenceRatio": 0.592,
+      "longSentenceRatio": 0.143,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "formal",
+      "imagery": "concrete",
+      "keyword": [
+        "信封",
+        "雨夜",
+        "回声"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 atmosphere-driven 种子 #27：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

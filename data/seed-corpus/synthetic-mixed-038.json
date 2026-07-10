@@ -1,0 +1,115 @@
+{
+  "type": "mixed",
+  "typeConfidence": 0.76,
+  "wordCount": 1002,
+  "paragraphCount": 13,
+  "skeleton": {
+    "hookType": "mixed",
+    "hookStrength": 3.1,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 mixed 钩子分析，强度 3.1",
+    "threeActRatio": {
+      "setup": 0.394,
+      "confrontation": 0.387,
+      "resolution": 0.219
+    },
+    "reversals": [
+      {
+        "position": 0.252,
+        "type": "cognition",
+        "description": "时间线错位揭露"
+      }
+    ],
+    "endingType": "tragic",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 4.8,
+    "eventDensityEvidence": "合成事件密度 4.8/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": 0.1,
+        "label": "平静"
+      },
+      {
+        "position": 0.2,
+        "emotion": 2.5,
+        "label": "震动"
+      },
+      {
+        "position": 0.4,
+        "emotion": 2.7,
+        "label": "平静"
+      },
+      {
+        "position": 0.6,
+        "emotion": 1,
+        "label": "平静"
+      },
+      {
+        "position": 0.8,
+        "emotion": -2.1,
+        "label": "颠覆"
+      },
+      {
+        "position": 1,
+        "emotion": -3.3,
+        "label": "决意"
+      }
+    ],
+    "emotionRange": {
+      "min": -2.9,
+      "max": 2.7
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.322,
+    "narrationRatio": 0.678,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 6.3,
+      "auditory": 2.7,
+      "tactile": 1.7,
+      "olfactory": 1.3,
+      "gustatory": 0.8
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.478
+    },
+    "conflictLayers": {
+      "interpersonal": 0.333,
+      "internal": 0.317,
+      "environmental": 0.35,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 28,
+      "shortSentenceRatio": 0.466,
+      "longSentenceRatio": 0.18,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "neutral",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 mixed 种子 #38：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

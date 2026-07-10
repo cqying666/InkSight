@@ -1,0 +1,130 @@
+{
+  "type": "plot-driven",
+  "typeConfidence": 0.79,
+  "wordCount": 1187,
+  "paragraphCount": 15,
+  "skeleton": {
+    "hookType": "character",
+    "hookStrength": 4,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 plot-driven 钩子分析，强度 4",
+    "threeActRatio": {
+      "setup": 0.314,
+      "confrontation": 0.552,
+      "resolution": 0.134
+    },
+    "reversals": [
+      {
+        "position": 0.26,
+        "type": "plot",
+        "description": "主角认知崩塌"
+      },
+      {
+        "position": 0.382,
+        "type": "cognition",
+        "description": "看似 allies 的人物反水"
+      },
+      {
+        "position": 0.532,
+        "type": "plot",
+        "description": "看似 allies 的人物反水"
+      },
+      {
+        "position": 0.686,
+        "type": "plot",
+        "description": "时间线错位揭露"
+      },
+      {
+        "position": 0.816,
+        "type": "plot",
+        "description": "时间线错位揭露"
+      }
+    ],
+    "endingType": "open",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 6.2,
+    "eventDensityEvidence": "合成事件密度 6.2/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": -0.7,
+        "label": "决意"
+      },
+      {
+        "position": 0.25,
+        "emotion": 3.2,
+        "label": "震动"
+      },
+      {
+        "position": 0.5,
+        "emotion": 1.9,
+        "label": "怀疑"
+      },
+      {
+        "position": 0.75,
+        "emotion": -1.7,
+        "label": "恐惧"
+      },
+      {
+        "position": 1,
+        "emotion": -4.6,
+        "label": "平静"
+      }
+    ],
+    "emotionRange": {
+      "min": -4.5,
+      "max": 3.1
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.282,
+    "narrationRatio": 0.718,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 3.2,
+      "auditory": 1.3,
+      "tactile": 0.9,
+      "olfactory": 0.6,
+      "gustatory": 0.2
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.592
+    },
+    "conflictLayers": {
+      "interpersonal": 0.642,
+      "internal": 0.243,
+      "environmental": 0.115,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 18,
+      "shortSentenceRatio": 0.641,
+      "longSentenceRatio": 0.107,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "neutral",
+      "imagery": "concrete",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 plot-driven 种子 #13：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

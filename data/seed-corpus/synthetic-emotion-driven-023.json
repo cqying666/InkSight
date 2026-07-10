@@ -1,0 +1,135 @@
+{
+  "type": "emotion-driven",
+  "typeConfidence": 0.93,
+  "wordCount": 1091,
+  "paragraphCount": 14,
+  "skeleton": {
+    "hookType": "character",
+    "hookStrength": 3,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 emotion-driven 钩子分析，强度 3",
+    "threeActRatio": {
+      "setup": 0.416,
+      "confrontation": 0.348,
+      "resolution": 0.236
+    },
+    "reversals": [
+      {
+        "position": 0.266,
+        "type": "plot",
+        "description": "主角认知崩塌"
+      },
+      {
+        "position": 0.489,
+        "type": "emotion",
+        "description": "看似 allies 的人物反水"
+      },
+      {
+        "position": 0.707,
+        "type": "cognition",
+        "description": "主角发现关键线索"
+      }
+    ],
+    "endingType": "happy",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 3.2,
+    "eventDensityEvidence": "合成事件密度 3.2/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": 0.3,
+        "label": "释然"
+      },
+      {
+        "position": 0.143,
+        "emotion": 2.3,
+        "label": "颠覆"
+      },
+      {
+        "position": 0.286,
+        "emotion": 3.6,
+        "label": "平静"
+      },
+      {
+        "position": 0.429,
+        "emotion": 3.9,
+        "label": "恐惧"
+      },
+      {
+        "position": 0.571,
+        "emotion": 1.6,
+        "label": "颠覆"
+      },
+      {
+        "position": 0.714,
+        "emotion": -0.2,
+        "label": "警觉"
+      },
+      {
+        "position": 0.857,
+        "emotion": -2.2,
+        "label": "释然"
+      },
+      {
+        "position": 1,
+        "emotion": -2.9,
+        "label": "警觉"
+      }
+    ],
+    "emotionRange": {
+      "min": -3.3,
+      "max": 4.1
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.312,
+    "narrationRatio": 0.688,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 3.2,
+      "auditory": 2,
+      "tactile": 1.2,
+      "olfactory": 0.7,
+      "gustatory": 0.3
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.526
+    },
+    "conflictLayers": {
+      "interpersonal": 0.33,
+      "internal": 0.563,
+      "environmental": 0.107,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 30,
+      "shortSentenceRatio": 0.405,
+      "longSentenceRatio": 0.124,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "formal",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 emotion-driven 种子 #23：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

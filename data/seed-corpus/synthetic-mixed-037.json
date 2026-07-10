@@ -1,0 +1,120 @@
+{
+  "type": "mixed",
+  "typeConfidence": 0.77,
+  "wordCount": 1829,
+  "paragraphCount": 23,
+  "skeleton": {
+    "hookType": "suspense",
+    "hookStrength": 3,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 mixed 钩子分析，强度 3",
+    "threeActRatio": {
+      "setup": 0.373,
+      "confrontation": 0.482,
+      "resolution": 0.145
+    },
+    "reversals": [
+      {
+        "position": 0.256,
+        "type": "cognition",
+        "description": "真相与预期相反"
+      },
+      {
+        "position": 0.491,
+        "type": "cognition",
+        "description": "看似 allies 的人物反水"
+      },
+      {
+        "position": 0.733,
+        "type": "cognition",
+        "description": "时间线错位揭露"
+      }
+    ],
+    "endingType": "twist",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 4.1,
+    "eventDensityEvidence": "合成事件密度 4.1/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": -0.9,
+        "label": "决意"
+      },
+      {
+        "position": 0.25,
+        "emotion": 1.8,
+        "label": "震动"
+      },
+      {
+        "position": 0.5,
+        "emotion": 1.1,
+        "label": "警觉"
+      },
+      {
+        "position": 0.75,
+        "emotion": -2.2,
+        "label": "怀疑"
+      },
+      {
+        "position": 1,
+        "emotion": -4.1,
+        "label": "震动"
+      }
+    ],
+    "emotionRange": {
+      "min": -3.7,
+      "max": 2.4
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.318,
+    "narrationRatio": 0.682,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 3.3,
+      "auditory": 1.4,
+      "tactile": 1.1,
+      "olfactory": 1,
+      "gustatory": 0.6
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.53
+    },
+    "conflictLayers": {
+      "interpersonal": 0.56,
+      "internal": 0.31,
+      "environmental": 0.13,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 29,
+      "shortSentenceRatio": 0.434,
+      "longSentenceRatio": 0.165,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "formal",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 mixed 种子 #37：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

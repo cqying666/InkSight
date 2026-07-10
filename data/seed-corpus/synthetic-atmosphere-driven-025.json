@@ -1,0 +1,121 @@
+{
+  "type": "atmosphere-driven",
+  "typeConfidence": 0.8,
+  "wordCount": 1724,
+  "paragraphCount": 22,
+  "skeleton": {
+    "hookType": "suspense",
+    "hookStrength": 2.7,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 atmosphere-driven 钩子分析，强度 2.7",
+    "threeActRatio": {
+      "setup": 0.348,
+      "confrontation": 0.477,
+      "resolution": 0.175
+    },
+    "reversals": [
+      {
+        "position": 0.246,
+        "type": "emotion",
+        "description": "时间线错位揭露"
+      }
+    ],
+    "endingType": "ambiguous",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 1.8,
+    "eventDensityEvidence": "合成事件密度 1.8/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": 0.5,
+        "label": "决意"
+      },
+      {
+        "position": 0.167,
+        "emotion": 2.4,
+        "label": "释然"
+      },
+      {
+        "position": 0.333,
+        "emotion": 2.8,
+        "label": "释然"
+      },
+      {
+        "position": 0.5,
+        "emotion": 2.9,
+        "label": "失落"
+      },
+      {
+        "position": 0.667,
+        "emotion": 0.4,
+        "label": "决意"
+      },
+      {
+        "position": 0.833,
+        "emotion": -1.4,
+        "label": "警觉"
+      },
+      {
+        "position": 1,
+        "emotion": -2,
+        "label": "决意"
+      }
+    ],
+    "emotionRange": {
+      "min": -1.8,
+      "max": 3.1
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.188,
+    "narrationRatio": 0.812,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 6.1,
+      "auditory": 2.9,
+      "tactile": 1.1,
+      "olfactory": 1.2,
+      "gustatory": 0.3
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.544
+    },
+    "conflictLayers": {
+      "interpersonal": 0.263,
+      "internal": 0.421,
+      "environmental": 0.316,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 34,
+      "shortSentenceRatio": 0.643,
+      "longSentenceRatio": 0.164,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "neutral",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜",
+        "回声"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 atmosphere-driven 种子 #25：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

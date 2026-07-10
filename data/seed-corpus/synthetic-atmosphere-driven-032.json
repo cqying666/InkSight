@@ -1,0 +1,116 @@
+{
+  "type": "atmosphere-driven",
+  "typeConfidence": 0.87,
+  "wordCount": 1632,
+  "paragraphCount": 20,
+  "skeleton": {
+    "hookType": "mixed",
+    "hookStrength": 3.4,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 atmosphere-driven 钩子分析，强度 3.4",
+    "threeActRatio": {
+      "setup": 0.337,
+      "confrontation": 0.461,
+      "resolution": 0.202
+    },
+    "reversals": [
+      {
+        "position": 0.253,
+        "type": "plot",
+        "description": "看似 allies 的人物反水"
+      },
+      {
+        "position": 0.607,
+        "type": "plot",
+        "description": "看似 allies 的人物反水"
+      }
+    ],
+    "endingType": "happy",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 1.8,
+    "eventDensityEvidence": "合成事件密度 1.8/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": 0.4,
+        "label": "恐惧"
+      },
+      {
+        "position": 0.25,
+        "emotion": 2.6,
+        "label": "平静"
+      },
+      {
+        "position": 0.5,
+        "emotion": 1.8,
+        "label": "释然"
+      },
+      {
+        "position": 0.75,
+        "emotion": -0.7,
+        "label": "释然"
+      },
+      {
+        "position": 1,
+        "emotion": -2.2,
+        "label": "失落"
+      }
+    ],
+    "emotionRange": {
+      "min": -2.5,
+      "max": 2.8
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.21,
+    "narrationRatio": 0.79,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 7,
+      "auditory": 4.5,
+      "tactile": 2.8,
+      "olfactory": 1.8,
+      "gustatory": 1.1
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.539
+    },
+    "conflictLayers": {
+      "interpersonal": 0.338,
+      "internal": 0.467,
+      "environmental": 0.195,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 26,
+      "shortSentenceRatio": 0.493,
+      "longSentenceRatio": 0.152,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "neutral",
+      "imagery": "abstract",
+      "keyword": [
+        "信封",
+        "雨夜",
+        "回声"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 atmosphere-driven 种子 #32：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

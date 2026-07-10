@@ -1,0 +1,115 @@
+{
+  "type": "emotion-driven",
+  "typeConfidence": 0.78,
+  "wordCount": 901,
+  "paragraphCount": 11,
+  "skeleton": {
+    "hookType": "character",
+    "hookStrength": 2.8,
+    "hookEvidence": "合成种子（无原文证据）",
+    "hookAnalysis": "合成 emotion-driven 钩子分析，强度 2.8",
+    "threeActRatio": {
+      "setup": 0.374,
+      "confrontation": 0.449,
+      "resolution": 0.177
+    },
+    "reversals": [
+      {
+        "position": 0.225,
+        "type": "emotion",
+        "description": "主角发现关键线索"
+      },
+      {
+        "position": 0.614,
+        "type": "cognition",
+        "description": "主角发现关键线索"
+      }
+    ],
+    "endingType": "ambiguous",
+    "endingAnalysis": "合成结局分析",
+    "eventDensity": 2,
+    "eventDensityEvidence": "合成事件密度 2/千字"
+  },
+  "flesh": {
+    "emotionCurve": [
+      {
+        "position": 0,
+        "emotion": -0.7,
+        "label": "失落"
+      },
+      {
+        "position": 0.25,
+        "emotion": 3.4,
+        "label": "决意"
+      },
+      {
+        "position": 0.5,
+        "emotion": 2.8,
+        "label": "震动"
+      },
+      {
+        "position": 0.75,
+        "emotion": -2.5,
+        "label": "警觉"
+      },
+      {
+        "position": 1,
+        "emotion": -4.4,
+        "label": "颠覆"
+      }
+    ],
+    "emotionRange": {
+      "min": -4.9,
+      "max": 3.6
+    },
+    "emotionTrend": "合成情绪走势",
+    "dialogueRatio": 0.304,
+    "narrationRatio": 0.696,
+    "dialogueAnalysis": "合成对话分析",
+    "sensoryFrequency": {
+      "visual": 3.7,
+      "auditory": 1.1,
+      "tactile": 1,
+      "olfactory": 0.7,
+      "gustatory": 0.4
+    },
+    "sensoryAnalysis": "合成感官分析",
+    "characterArc": {
+      "desire": "主角的核心欲望",
+      "obstacle": "外部阻碍",
+      "change": "主角的转变",
+      "changePoint": 0.599
+    },
+    "conflictLayers": {
+      "interpersonal": 0.305,
+      "internal": 0.548,
+      "environmental": 0.147,
+      "dominantConflict": "合成主导冲突"
+    }
+  },
+  "style": {
+    "sentenceStyle": {
+      "avgLength": 32,
+      "shortSentenceRatio": 0.499,
+      "longSentenceRatio": 0.106,
+      "rhythm": "合成句式节奏"
+    },
+    "wordPreference": {
+      "formality": "neutral",
+      "imagery": "concrete",
+      "keyword": [
+        "信封",
+        "雨夜"
+      ]
+    },
+    "perspective": "first",
+    "perspectiveAnalysis": "合成视角分析",
+    "tense": "past",
+    "tenseAnalysis": "合成时态分析"
+  },
+  "summary": "合成 emotion-driven 种子 #21：用于基准库 bootstrap",
+  "keyFindings": [
+    "合成发现 1",
+    "合成发现 2"
+  ]
+}

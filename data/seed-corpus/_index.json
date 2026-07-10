@@ -1,0 +1,245 @@
+{
+  "generatedAt": "2026-07-02T12:59:56.981Z",
+  "entries": [
+    {
+      "file": "synthetic-plot-driven-000",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-001",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-002",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-003",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-004",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-005",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-006",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-007",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-008",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-009",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-010",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-011",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-012",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-plot-driven-013",
+      "type": "plot-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-014",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-015",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-016",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-017",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-018",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-019",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-020",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-021",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-022",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-emotion-driven-023",
+      "type": "emotion-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-024",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-025",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-026",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-027",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-028",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-029",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-030",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-031",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-032",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-atmosphere-driven-033",
+      "type": "atmosphere-driven",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-mixed-034",
+      "type": "mixed",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-mixed-035",
+      "type": "mixed",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-mixed-036",
+      "type": "mixed",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-mixed-037",
+      "type": "mixed",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-mixed-038",
+      "type": "mixed",
+      "source": "synthetic",
+      "schemaValid": true
+    },
+    {
+      "file": "synthetic-mixed-039",
+      "type": "mixed",
+      "source": "synthetic",
+      "schemaValid": true
+    }
+  ]
+}
