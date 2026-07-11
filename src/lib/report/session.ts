@@ -9,45 +9,76 @@ import type { AnalysisResult } from "../analysis/pipeline";
 
 const KEY = "inksight:analysis";
 const PARAGRAPHS_KEY = "inksight:paragraphs";
+const REPORT_ID_KEY = "inksight:analysis:report-id";
 
-export function saveAnalysis(result: AnalysisResult, paragraphs: string[]) {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(KEY, JSON.stringify(result));
-    sessionStorage.setItem(PARAGRAPHS_KEY, JSON.stringify(paragraphs));
-  } catch {
+function stableLegacyReportId(raw: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < raw.length; index++) {
+    hash ^= raw.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `legacy-report-${(hash >>> 0).toString(36)}`;
+}
+
+export function saveAnalysis(
+  result: AnalysisResult,
+  paragraphs: string[],
+  reportId = `report-${Date.now()}`
+): string {
+  if (typeof window === "undefined") return reportId;
+
+  const clearAll = () => {
     sessionStorage.removeItem(KEY);
     sessionStorage.removeItem(PARAGRAPHS_KEY);
+    sessionStorage.removeItem(REPORT_ID_KEY);
+  };
+
+  const trySave = (para: string[]): boolean => {
     try {
       sessionStorage.setItem(KEY, JSON.stringify(result));
-      sessionStorage.setItem(PARAGRAPHS_KEY, JSON.stringify(paragraphs));
+      sessionStorage.setItem(PARAGRAPHS_KEY, JSON.stringify(para));
+      sessionStorage.setItem(REPORT_ID_KEY, reportId);
+      return true;
     } catch {
-      // 数据过大，压缩 paragraphs
-      try {
-        const trimmedParagraphs = paragraphs.slice(0, 50);
-        sessionStorage.setItem(KEY, JSON.stringify(result));
-        sessionStorage.setItem(PARAGRAPHS_KEY, JSON.stringify(trimmedParagraphs));
-      } catch {
-        // 最后降级：丢弃 paragraphs
-        sessionStorage.setItem(KEY, JSON.stringify(result));
-        sessionStorage.setItem(PARAGRAPHS_KEY, JSON.stringify(paragraphs.slice(0, 10)));
-      }
+      clearAll();
+      return false;
     }
+  };
+
+  if (trySave(paragraphs)) return reportId;
+  if (trySave(paragraphs.slice(0, 50))) return reportId;
+  if (trySave(paragraphs.slice(0, 10))) return reportId;
+
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify(result));
+    sessionStorage.setItem(PARAGRAPHS_KEY, JSON.stringify([]));
+    sessionStorage.setItem(REPORT_ID_KEY, reportId);
+  } catch {
+    clearAll();
   }
+
+  return reportId;
 }
 
 export function loadAnalysis(): {
   analysis: AnalysisResult;
   paragraphs: string[];
+  reportId: string;
 } | null {
   if (typeof window === "undefined") return null;
   const raw = sessionStorage.getItem(KEY);
   const rawPara = sessionStorage.getItem(PARAGRAPHS_KEY);
   if (!raw || !rawPara) return null;
   try {
+    let reportId = sessionStorage.getItem(REPORT_ID_KEY);
+    if (!reportId) {
+      reportId = stableLegacyReportId(raw);
+      sessionStorage.setItem(REPORT_ID_KEY, reportId);
+    }
     return {
       analysis: JSON.parse(raw) as AnalysisResult,
       paragraphs: JSON.parse(rawPara) as string[],
+      reportId,
     };
   } catch {
     return null;
@@ -58,6 +89,7 @@ export function clearAnalysis() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(KEY);
   sessionStorage.removeItem(PARAGRAPHS_KEY);
+  sessionStorage.removeItem(REPORT_ID_KEY);
 }
 
 /**
@@ -75,12 +107,13 @@ export function splitParagraphs(text: string): string[] {
 // 保留旧函数名供 analyzing 页和其他引用过渡使用
 
 export function saveFeedback(result: AnalysisResult, paragraphs: string[]) {
-  saveAnalysis(result, paragraphs);
+  return saveAnalysis(result, paragraphs);
 }
 
 export function loadFeedback(): {
   analysis: AnalysisResult;
   paragraphs: string[];
+  reportId: string;
 } | null {
   return loadAnalysis();
 }

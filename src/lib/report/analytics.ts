@@ -24,6 +24,9 @@ export type AnalyticsEventName =
   | "writing_started"
   | "outline_created"
   | "draft_completed"
+  | "draft_saved"
+  | "material_deposit_confirmed"
+  | "material_deposit_skipped"
   // 特性表第 10 项补充
   | "report_exported"
   | "report_rated"
@@ -33,7 +36,9 @@ export type AnalyticsEventName =
   | "file_parse_failed"
   | "upload_submitted"
   | "analysis_failed"
+  | "analysis_retry"
   | "report_demo_viewed"
+  | "material_extract_failed"
   // Phase 5 创作工作台
   | "write_entered"
   | "write_focus_mode_toggled"

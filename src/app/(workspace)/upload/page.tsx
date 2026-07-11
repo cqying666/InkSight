@@ -120,14 +120,14 @@ export default function UploadPage() {
     try {
       sessionStorage.setItem(
         "inksight:pending",
-        JSON.stringify({ text, paragraphs })
+        JSON.stringify({ text, paragraphs, fileName })
       );
       router.push("/analyzing");
     } catch (e) {
       setError(errMsg(e, "提交失败"));
       setSubmitting(false);
     }
-  }, [charCount, text, paragraphs, router, fileFormat]);
+  }, [charCount, text, paragraphs, fileName, router, fileFormat]);
 
   const hasFile = fileName !== null && text.length > 0 && fileName !== "粘贴文本";
 

@@ -499,9 +499,9 @@ export function validatePlotAnalysis(data: unknown): {
   data?: PlotAnalysis;
   errors?: string[];
 } {
-  // 预处理：补齐缺失的顶层 key，避免 LLM 输出截断导致整体验证失败
+  let parsedData = data;
   if (data && typeof data === "object" && !Array.isArray(data)) {
-    const obj = data as Record<string, unknown>;
+    const obj = { ...(data as Record<string, unknown>) };
     const defaults: Record<string, unknown> = {
       editorView: { basicInfo: {}, guideAnalysis: {}, sentenceAnalysis: [], guideReview: {}, entryPoint: {}, payPoint: {}, deepTeardownJudgment: {} },
       sixCoreElements: { pace: {}, framework: {}, protagonist: {}, antagonist: {}, supporting: [], painPoint: {}, satisfactionPoint: {}, infoGap: {} },
@@ -515,8 +515,9 @@ export function validatePlotAnalysis(data: unknown): {
     for (const key of Object.keys(defaults)) {
       if (obj[key] == null) obj[key] = defaults[key];
     }
+    parsedData = obj;
   }
-  const result = PlotAnalysisSchema.safeParse(data);
+  const result = PlotAnalysisSchema.safeParse(parsedData);
   if (result.success) return { success: true, data: result.data };
   return {
     success: false,
@@ -529,9 +530,9 @@ export function validateCharacterAnalysis(data: unknown): {
   data?: CharacterAnalysis;
   errors?: string[];
 } {
-  // 预处理：补齐缺失的顶层 key，避免 LLM 输出截断导致整体验证失败
+  let parsedData = data;
   if (data && typeof data === "object" && !Array.isArray(data)) {
-    const obj = data as Record<string, unknown>;
+    const obj = { ...(data as Record<string, unknown>) };
     const defaults: Record<string, unknown> = {
       characterList: { bookName: "", genre: "", coreCharacterAttraction: "", totalCharacters: "", characters: [] },
       mechanismTables: [],
@@ -544,8 +545,9 @@ export function validateCharacterAnalysis(data: unknown): {
     for (const key of Object.keys(defaults)) {
       if (obj[key] == null) obj[key] = defaults[key];
     }
+    parsedData = obj;
   }
-  const result = CharacterAnalysisSchema.safeParse(data);
+  const result = CharacterAnalysisSchema.safeParse(parsedData);
   if (result.success) return { success: true, data: result.data };
   return {
     success: false,

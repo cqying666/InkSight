@@ -8,6 +8,10 @@ import {
   buildHistoryEntry,
   appendTeardownHistory,
 } from "@/lib/report/teardown-history";
+import {
+  buildAnalysisMaterialCandidates,
+  upsertMaterial,
+} from "@/lib/material";
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
 
 /**
@@ -24,6 +28,7 @@ import type { AnalysisResult } from "@/lib/analysis/pipeline";
 interface PendingInput {
   text: string;
   paragraphs: string[];
+  fileName?: string;
 }
 
 const STAGES = [
@@ -39,12 +44,11 @@ export default function AnalyzingPage() {
   const [stageIdx, setStageIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const startedRef = useRef(false);
+  const [retrying, setRetrying] = useState(false);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const pendingRef = useRef<PendingInput | null>(null);
 
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
+  const runAnalysis = () => {
     const pendingRaw = sessionStorage.getItem("inksight:pending");
     if (!pendingRaw) {
       router.replace("/upload");
@@ -58,6 +62,20 @@ export default function AnalyzingPage() {
       router.replace("/upload");
       return;
     }
+    pendingRef.current = pending;
+
+    setProgress(0);
+    setStageIdx(0);
+    setError(null);
+    setDone(false);
+    setRetrying(false);
+
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+
+    let cancelled = false;
 
     const timer = setInterval(() => {
       setProgress((p) => {
@@ -76,6 +94,7 @@ export default function AnalyzingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: pending.text,
+        ...(pending.fileName ? { fileName: pending.fileName } : {}),
       }),
       signal: controller.signal,
     })
@@ -86,6 +105,7 @@ export default function AnalyzingPage() {
             data.error || data.detail || `HTTP ${res.status}`
           );
         }
+        if (cancelled) return;
         clearInterval(timer);
         setProgress(100);
         setStageIdx(1);
@@ -99,32 +119,70 @@ export default function AnalyzingPage() {
           character_status: result.character?.status ?? "error",
         });
 
-        saveAnalysis(result, pending.paragraphs);
-
-        const historyTitle = pending.text.slice(0, 20).trim() || "未命名作品";
+        const historyTitle = pending.fileName && pending.fileName.trim() !== "粘贴文本"
+          ? pending.fileName.trim().replace(/\.[^.]+$/, "")
+          : pending.text.slice(0, 20).trim() || "未命名作品";
         const plotType = result.plot.data?.editorView.basicInfo.type ?? "未知";
+        const reportId = `${plotType}-${Date.now()}`;
+        saveAnalysis(result, pending.paragraphs, reportId);
         appendTeardownHistory(
-          buildHistoryEntry(result, historyTitle, plotType + "-" + Date.now())
+          buildHistoryEntry(result, historyTitle, reportId)
         );
+
+        // 拆文素材自动入库：提取 6 张素材卡 + 人设卡 + 关系卡，持久化到 localStorage
+        // source = "teardown" 会被「全部素材」和「拆文汇总」同时命中
+        try {
+          const candidates = buildAnalysisMaterialCandidates(result, reportId);
+          let persistedCount = 0;
+          for (const c of candidates) {
+            if (upsertMaterial(c.material)) persistedCount++;
+          }
+          trackEvent("material_auto_extracted", {
+            report_id: reportId,
+            extract_count: candidates.length,
+            persisted_count: persistedCount,
+            source: "teardown",
+          });
+        } catch (e) {
+          // 素材入库失败不影响主流程，静默降级
+          trackEvent("material_extract_failed", {
+            report_id: reportId,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
         sessionStorage.removeItem("inksight:pending");
 
         navTimer = setTimeout(() => router.replace("/report"), 600);
       })
       .catch((e) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || cancelled) return;
         clearInterval(timer);
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
         trackEvent("analysis_failed", { error: msg });
       });
 
-    return () => {
+    cleanupRef.current = () => {
+      cancelled = true;
       clearInterval(timer);
       controller.abort();
       if (navTimer) clearTimeout(navTimer);
-      startedRef.current = false;
     };
-  }, [router]);
+  };
+
+  const handleRetry = () => {
+    setRetrying(true);
+    trackEvent("analysis_retry", {});
+    runAnalysis();
+  };
+
+  useEffect(() => {
+    runAnalysis();
+    return () => {
+      if (cleanupRef.current) cleanupRef.current();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main className="min-h-screen bg-bg">
@@ -222,10 +280,21 @@ export default function AnalyzingPage() {
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => router.replace("/upload")}
-                  className="rounded-full border border-primary bg-primary px-4 py-1.5 text-xs text-text-inverse transition-colors hover:opacity-90"
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="rounded-full border border-primary bg-primary px-4 py-1.5 text-xs text-text-inverse transition-colors hover:opacity-90 disabled:opacity-50"
                 >
-                  返回重试
+                  {retrying ? "重新拆解中…" : "重新拆解"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sessionStorage.removeItem("inksight:pending");
+                    router.replace("/upload");
+                  }}
+                  className="rounded-md border border-border bg-bg px-4 py-1.5 text-xs text-text transition-colors hover:border-accent"
+                >
+                  返回上传
                 </button>
                 <button
                   type="button"

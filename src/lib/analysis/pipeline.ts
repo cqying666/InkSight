@@ -29,9 +29,23 @@ export const AnalysisInputSchema = z.object({
     .string()
     .min(100, "小说文本过短，至少 100 字")
     .max(50_000, "上限 50000 字"),
+  fileName: z.string().optional(),
 });
 
 export type AnalysisInput = z.infer<typeof AnalysisInputSchema>;
+
+/**
+ * 从文件名推导标题（去掉扩展名）。
+ * "粘贴文本" 等非文件名输入返回 null。
+ */
+function deriveTitleFromFileName(fileName?: string): string | null {
+  if (!fileName || !fileName.trim()) return null;
+  const trimmed = fileName.trim();
+  if (trimmed === "粘贴文本") return null;
+  const dotIdx = trimmed.lastIndexOf(".");
+  const base = dotIdx > 0 ? trimmed.slice(0, dotIdx) : trimmed;
+  return base.trim() || null;
+}
 
 // ===== 分析结果类型 =====
 
@@ -201,6 +215,18 @@ export async function runAnalysisPipeline(
   // 两个都失败是致命的
   if (plot.status === "error" && character.status === "error") {
     throw new Error(degradeReason || "拆文和人设分析均失败");
+  }
+
+  // 用真实文件名覆盖 LLM 推断的标题
+  const titleFromFileName = deriveTitleFromFileName(input.fileName);
+  if (titleFromFileName) {
+    if (plot.status === "loaded" && plot.data) {
+      plot.data.editorView.basicInfo.title = titleFromFileName;
+      plot.data.masterTable.bookName = titleFromFileName;
+    }
+    if (character.status === "loaded" && character.data) {
+      character.data.characterList.bookName = titleFromFileName;
+    }
   }
 
   const totalMs = Date.now() - startTime;
