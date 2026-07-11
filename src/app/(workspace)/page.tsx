@@ -7,6 +7,7 @@ import { computeUserProfile } from "@/lib/report/metrics";
 import { peekEvents } from "@/lib/report/analytics";
 import { SceneCard } from "@/components/home/SceneCard";
 import { CoachInput } from "@/components/home/CoachInput";
+import { LoopDashboardSection } from "@/components/home/LoopDashboardSection";
 
 /**
  * 工作台首页 · 正式版
@@ -119,6 +120,8 @@ export default function HomePage() {
             ]}
           />
         </section>
+
+        <LoopDashboardSection />
 
         {/* 场景卡片 */}
         <section>

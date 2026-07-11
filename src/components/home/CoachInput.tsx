@@ -80,10 +80,9 @@ export function CoachInput({
         setParseError(
           err instanceof Error ? err.message : `解析 ${file.name} 失败`
         );
-      } finally {
-        setParsing(false);
       }
     }
+    setParsing(false);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

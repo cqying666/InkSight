@@ -279,7 +279,10 @@ export function computeDashboardData(
   // 便捷取数（保持下游代码可读性）
   const getEvents = (name: string): AnalyticsEvent[] =>
     eventsByNameMap.get(name) ?? [];
-  const uploadEvents = getEvents("novel_uploaded");
+  const uploadEvents = [
+    ...getEvents("novel_uploaded"),
+    ...getEvents("upload_submitted"),
+  ];
   const analysisEvents = getEvents("analysis_completed");
   const suggestionAdoptedEvents = getEvents("suggestion_adopted");
   const trendViewedEvents = getEvents("trend_viewed");
@@ -297,14 +300,29 @@ export function computeDashboardData(
   // ===== 北极星：闭环完成次数（从 sidEventNames 单次查表，O(S)） =====
   const teardownToWritingLoopSids = new Set<string>();
   const fullLoopSids = new Set<string>();
-  for (const [sid, names] of sidEventNames) {
-    const hasAnalysis = names.has("analysis_completed");
-    const hasWriting = names.has("write_entered") || names.has("draft_completed");
-    const hasPostAnalysis = names.has("write_analyzed");
-    if (hasAnalysis && hasWriting) {
+  for (const [sid] of sidEventNames) {
+    const sequence = filtered
+      .filter((event) => event.sid === sid)
+      .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    const analysisIndex = sequence.findIndex(
+      (event) => event.name === "analysis_completed"
+    );
+    const writingIndex = sequence.findIndex(
+      (event, index) =>
+        index > analysisIndex &&
+        (event.name === "write_entered" || event.name === "draft_completed")
+    );
+    const postAnalysisIndex = sequence.findIndex(
+      (event, index) => index > writingIndex && event.name === "write_analyzed"
+    );
+    if (analysisIndex >= 0 && writingIndex > analysisIndex) {
       teardownToWritingLoopSids.add(sid);
     }
-    if (hasAnalysis && hasWriting && hasPostAnalysis) {
+    if (
+      analysisIndex >= 0 &&
+      writingIndex > analysisIndex &&
+      postAnalysisIndex > writingIndex
+    ) {
       fullLoopSids.add(sid);
     }
   }

@@ -7,7 +7,6 @@ import {
   computeDashboardData,
   type DashboardData,
 } from "@/lib/report/metrics";
-import { trackEvent } from "@/lib/report/analytics";
 
 type TimeRange = 7 | 30 | 0;
 
@@ -18,8 +17,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    trackEvent("report_viewed", { dashboard: true, time_range: timeRange });
-  }, [timeRange]);
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;

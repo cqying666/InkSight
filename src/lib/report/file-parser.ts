@@ -44,10 +44,53 @@ function getExt(fileName: string): string {
   return dot >= 0 ? lower.slice(dot + 1) : "";
 }
 
-/** 判断文本前 1KB 是否含大量控制字符（二进制特征） */
 function looksBinary(sample: string): boolean {
   const ctrl = (sample.match(/[\x00-\x08\x0E-\x1F]/g) || []).length;
   return ctrl > sample.length * 0.05;
+}
+
+function estimateEncoding(data: Uint8Array): string {
+  let hasHighBit = false;
+  let hasGbkPattern = false;
+  for (let i = 0; i < Math.min(data.length, 1024); i++) {
+    const byte = data[i];
+    if (byte > 127) {
+      hasHighBit = true;
+      if (i + 1 < data.length) {
+        const nextByte = data[i + 1];
+        if (byte >= 0x81 && byte <= 0xFE && nextByte >= 0x40 && nextByte <= 0xFE) {
+          hasGbkPattern = true;
+          break;
+        }
+      }
+    }
+  }
+  if (!hasHighBit) return "utf-8";
+  return hasGbkPattern ? "gbk" : "utf-8";
+}
+
+async function readTextWithEncoding(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const data = new Uint8Array(buffer);
+  const detected = estimateEncoding(data);
+
+  const decoderUtf8 = new TextDecoder("utf-8");
+  const textUtf8 = decoderUtf8.decode(data);
+
+  if (detected === "gbk") {
+    try {
+      const decoderGbk = new TextDecoder("gbk");
+      const textGbk = decoderGbk.decode(data);
+      const garbageUtf8 = (textUtf8.match(/\uFFFD/g) || []).length;
+      const garbageGbk = (textGbk.match(/\uFFFD/g) || []).length;
+      if (garbageUtf8 > garbageGbk && garbageUtf8 > textUtf8.length * 0.01) {
+        return textGbk;
+      }
+    } catch {
+    }
+  }
+
+  return textUtf8;
 }
 
 /** 剥离 RTF 控制字，保留可见文本 */
@@ -69,7 +112,7 @@ export async function parseFile(file: File): Promise<ParseResult> {
 
   // ===== 1. RTF =====
   if (ext === "rtf" || mime === "application/rtf") {
-    const raw = await file.text();
+    const raw = await readTextWithEncoding(file);
     return { text: stripRtf(raw), format: "rtf", parser: "rtf" };
   }
 
@@ -130,13 +173,13 @@ export async function parseFile(file: File): Promise<ParseResult> {
 
   // ===== 4. 纯文本类 =====
   if (TEXT_EXTS.has(ext) || mime.startsWith("text/")) {
-    const text = await file.text();
+    const text = await readTextWithEncoding(file);
     return { text, format: ext || "txt", parser: "text" };
   }
 
   // ===== 5. 未知格式：尽力读文本，乱码则提示 =====
   try {
-    const text = await file.text();
+    const text = await readTextWithEncoding(file);
     if (looksBinary(text.slice(0, 1024))) {
       throw new Error(
         `暂不支持 .${ext || "未知"} 格式的二进制文件，请转为 .txt / .docx / .pdf 后上传`
