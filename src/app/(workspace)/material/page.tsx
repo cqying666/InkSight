@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   buildIndex,
   search,
-  loadUserMaterials,
   upsertMaterial,
   setTags as storageSetTags,
   setNotes as storageSetNotes,
@@ -16,9 +15,12 @@ import {
   COMPONENT_KIND_LABEL,
   type Material,
   type ComponentKindValue,
+  type MaterialCategory,
+  loadAllMaterials,
 } from "@/lib/material";
 import { trackEvent } from "@/lib/report/analytics";
 import { degradeMaterialSearch } from "@/lib/trend";
+import { CreateMaterialDialog } from "@/components/material/CreateMaterialDialog";
 
 /**
  * P4-T13 + P4-T14 素材库前端
@@ -40,102 +42,47 @@ import { degradeMaterialSearch } from "@/lib/trend";
  * 搜索：TF-IDF 语义搜索（P4-T11）+ 关键词降级（P4-T16）
  */
 
-const TREND_SAVED_KEY = "inksight:materials:trend-saved";
-
-/** 预置素材（演示三层结构） */
-function buildPresetMaterials(): Material[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: "preset-atom-1",
-      layer: "atom",
-      source: "preset",
-      createdAt: now,
-      updatedAt: now,
-      userId: "anonymous",
-      favorited: false,
-      atom: {
-        text: "他笑起来的样子，像冬天里最后一缕阳光",
-        tags: ["比喻", "温暖"],
-      },
-    },
-    {
-      id: "preset-atom-2",
-      layer: "atom",
-      source: "preset",
-      createdAt: now,
-      updatedAt: now,
-      userId: "anonymous",
-      favorited: false,
-      atom: {
-        text: "她关上门的瞬间，整个世界安静了下来，只剩下钟摆的滴答声",
-        tags: ["场景", "寂静"],
-      },
-    },
-    {
-      id: "preset-inspiration-1",
-      layer: "inspiration",
-      source: "preset",
-      createdAt: now,
-      updatedAt: now,
-      userId: "anonymous",
-      favorited: false,
-      inspiration: {
-        title: "悬疑节奏的音乐转译",
-        text: "如果把悬疑小说的节奏映射成音乐，快板=高事件密度，慢板=情感铺垫，休止符=反转前的沉默",
-        kind: "av_transcription",
-        tags: ["悬疑", "音乐", "节奏"],
-      },
-    },
-    {
-      id: "preset-inspiration-2",
-      layer: "inspiration",
-      source: "preset",
-      createdAt: now,
-      updatedAt: now,
-      userId: "anonymous",
-      favorited: false,
-      inspiration: {
-        title: "如果记忆可以交易",
-        text: "如果记忆可以交易，穷人会卖掉痛苦的记忆，富人会购买别人的幸福瞬间——这会催生什么样的故事？",
-        kind: "what_if",
-        tags: ["科幻", "记忆", "假设"],
-      },
-    },
-  ];
-}
-
 type MenuKey =
+  | "all"
   | "teardown_summary"
   | "character"
   | "plot"
   | "emotion"
+  | "inspiration"
   | "trend";
 
 /** 左侧一级菜单（按用户指定顺序） */
 const MENU_ITEMS: { key: MenuKey; label: string }[] = [
+  { key: "all", label: "全部素材" },
   { key: "teardown_summary", label: "拆文汇总" },
   { key: "character", label: "人设" },
   { key: "plot", label: "剧情" },
   { key: "emotion", label: "情绪描写语录" },
+  { key: "inspiration", label: "灵感" },
   { key: "trend", label: "热门元素" },
 ];
 
 /** 按菜单过滤素材 */
 function filterByMenu(materials: Material[], menu: MenuKey): Material[] {
   switch (menu) {
+    case "all":
+      return materials;
     case "teardown_summary":
       return materials.filter((m) => m.source === "teardown");
     case "character":
       return materials.filter((m) => m.component?.kind === "character_arc");
     case "plot":
       return materials.filter((m) =>
-        ["hook", "reversal", "conflict"].includes(m.component?.kind ?? "")
+        ["hook", "reversal", "conflict", "plot_template", "dialogue_pattern"].includes(
+          m.component?.kind ?? ""
+        )
       );
     case "emotion":
       return materials.filter(
         (m) => m.component?.kind === "emotion_curve" || m.layer === "atom"
       );
+    case "inspiration":
+      return materials.filter((m) => m.layer === "inspiration");
     case "trend":
       return materials.filter((m) => m.source === "trend");
   }
@@ -144,57 +91,17 @@ function filterByMenu(materials: Material[], menu: MenuKey): Material[] {
 export default function MaterialPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [query, setQuery] = useState("");
-  const [activeMenu, setActiveMenu] = useState<MenuKey>("teardown_summary");
+  const [activeMenu, setActiveMenu] = useState<MenuKey>("all");
   const [folders, setFolders] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   // 触发重新加载用户素材的信号（编辑后递增）
   const [userRev, setUserRev] = useState(0);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   // 初始化：加载预置 + 用户收藏 + 趋势页一键收藏
   useEffect(() => {
-    const preset = buildPresetMaterials();
-    const extracted: Material[] = [];
-
-    // 用户收藏 / 自编辑素材（覆盖同 id 的 preset/extracted）
-    const userSaved = loadUserMaterials();
-    const userMap = new Map(userSaved.map((m) => [m.id, m]));
-
-    // 趋势页一键收藏的素材（独立 key，迁移到 user store 后清空）
-    try {
-      const trendRaw = localStorage.getItem(TREND_SAVED_KEY);
-      if (trendRaw) {
-        const trendMats = JSON.parse(trendRaw) as Material[];
-        if (Array.isArray(trendMats)) {
-          for (const m of trendMats) {
-            if (!userMap.has(m.id)) {
-              userMap.set(m.id, m);
-              upsertMaterial(m);
-            }
-          }
-          localStorage.removeItem(TREND_SAVED_KEY);
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    // 合并：preset/extracted 作为基础，userSaved 覆盖同 id
-    const merged: Material[] = [];
-    const seenIds = new Set<string>();
-    for (const m of [...preset, ...extracted]) {
-      const overridden = userMap.get(m.id);
-      merged.push(overridden ?? m);
-      seenIds.add(m.id);
-    }
-    // 用户独立收藏的（不在 preset/extracted 中）追加
-    for (const m of userSaved) {
-      if (!seenIds.has(m.id)) {
-        merged.push(m);
-        seenIds.add(m.id);
-      }
-    }
-
-    setMaterials(merged);
+    setMaterials(loadAllMaterials());
     setFolders(listFolders());
     setLoaded(true);
   }, [userRev]);
@@ -230,10 +137,10 @@ export default function MaterialPage() {
   // 搜索空结果埋点（副作用移到 useEffect，避免在 useMemo 中调用）
   useEffect(() => {
     if (query.trim() && searchMode === "empty") {
-      trackEvent("material_saved", {
+      trackEvent("material_searched", {
         source: "search_empty",
-        material_type: "none",
-        tags: [query],
+        query,
+        mode: "empty",
       });
     }
   }, [query, searchMode]);
@@ -248,12 +155,14 @@ export default function MaterialPage() {
     // 必须先 upsert 进 user store（preset/extracted 默认不在 user store 中）
     upsertMaterial({ ...material, favorited: !material.favorited });
     setFolders(listFolders());
-    trackEvent("material_saved", {
-      source: material.source,
-      material_type: material.layer,
-      tags: material.component?.tags ?? material.atom?.tags ?? material.inspiration?.tags ?? [],
-      action: material.favorited ? "unfavorite" : "favorite",
-    });
+    if (!material.favorited) {
+      trackEvent("material_saved", {
+        source: material.source,
+        material_type: material.layer,
+        tags: material.component?.tags ?? material.atom?.tags ?? material.inspiration?.tags ?? [],
+        action: "favorite",
+      });
+    }
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
@@ -280,6 +189,33 @@ export default function MaterialPage() {
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
+  const handleCreateMaterial = useCallback(
+    (material: Material, category: MaterialCategory) => {
+      const persisted = upsertMaterial(material);
+      if (!persisted) return false;
+      setCreatedId(material.id);
+      setActiveMenu(
+        category === "character"
+          ? "character"
+          : category === "plot"
+            ? "plot"
+            : category === "emotion"
+              ? "emotion"
+              : "inspiration"
+      );
+      setShowCreate(false);
+      trackEvent("material_saved", {
+        source: "manual",
+        material_id: material.id,
+        category,
+      });
+      reloadUserMaterials();
+      window.setTimeout(() => setCreatedId(null), 3000);
+      return true;
+    },
+    [reloadUserMaterials]
+  );
+
   if (!loaded) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-bg">
@@ -291,13 +227,22 @@ export default function MaterialPage() {
   return (
     <main className="min-h-screen bg-bg">
       <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-12">
-        <header className="mb-8 border-b border-text/[0.08] pb-6">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent/70">
-            Collection
-          </p>
-          <h1 className="mt-2 font-serif text-title-xl font-medium text-text">
-            素材库
-          </h1>
+        <header className="mb-8 flex items-end justify-between gap-4 border-b border-text/[0.08] pb-6">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent/70">
+              Collection
+            </p>
+            <h1 className="mt-2 font-serif text-title-xl font-medium text-text">
+              素材库
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="rounded-full bg-primary px-5 py-2.5 text-sm text-text-inverse shadow-card transition-transform hover:-translate-y-0.5"
+          >
+            ＋ 新建素材
+          </button>
         </header>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
@@ -396,6 +341,7 @@ export default function MaterialPage() {
                     onSetTags={handleSetTags}
                     onSetNotes={handleSetNotes}
                     onSetFolder={handleSetFolder}
+                    highlighted={createdId === m.id}
                   />
                 ))
               )}
@@ -423,6 +369,13 @@ export default function MaterialPage() {
           </div>
         </footer>
       </div>
+      {showCreate && (
+        <CreateMaterialDialog
+          folders={folders}
+          onClose={() => setShowCreate(false)}
+          onCreate={handleCreateMaterial}
+        />
+      )}
     </main>
   );
 }
@@ -435,6 +388,7 @@ interface MaterialCardProps {
   onSetTags: (m: Material, tags: string[]) => void;
   onSetNotes: (m: Material, notes: string) => void;
   onSetFolder: (m: Material, folder: string | undefined) => void;
+  highlighted?: boolean;
 }
 
 function MaterialCard({
@@ -444,6 +398,7 @@ function MaterialCard({
   onSetTags,
   onSetNotes,
   onSetFolder,
+  highlighted = false,
 }: MaterialCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -506,8 +461,10 @@ function MaterialCard({
   };
 
   return (
-    <div className={`rounded-2xl border bg-surface p-4 shadow-card transition-shadow hover:shadow-float ${
-      m.favorited ? "border-accent/30" : "border-text/[0.05]"
+    <div className={`rounded-2xl border bg-surface p-4 shadow-card transition-all hover:shadow-float ${
+      highlighted
+        ? "border-primary ring-2 ring-primary/15"
+        : m.favorited ? "border-accent/30" : "border-text/[0.05]"
     }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">

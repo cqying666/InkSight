@@ -53,6 +53,13 @@ export {
 } from "./storage";
 
 export {
-  buildPresetMaterials,
   loadAllMaterials,
 } from "./catalog";
+
+export {
+  buildAnalysisMaterialCandidates,
+  createManualMaterial,
+  materialToCoachText,
+  type AnalysisMaterialCandidate,
+  type MaterialCategory,
+} from "./from-analysis";

@@ -46,42 +46,86 @@ export function loadUserMaterials(): Material[] {
   }
 }
 
-/** 全量覆盖写入（内部用） */
-function writeAll(materials: Material[]): void {
-  if (!isBrowser()) return;
+/** 全量覆盖写入（内部用），写后复读确认真实落盘 */
+function writeAll(materials: Material[]): boolean {
+  if (!isBrowser()) return false;
   try {
     // 上限 500 条，超出丢最旧
     const trimmed = materials.slice(-500);
-    localStorage.setItem(USER_MATERIALS_KEY, JSON.stringify(trimmed));
+    const serialized = JSON.stringify(trimmed);
+    localStorage.setItem(USER_MATERIALS_KEY, serialized);
+    return localStorage.getItem(USER_MATERIALS_KEY) === serialized;
   } catch {
-    // 容量满：丢一半再写
-    try {
-      localStorage.setItem(
-        USER_MATERIALS_KEY,
-        JSON.stringify(materials.slice(-250))
-      );
-    } catch {
-      // 静默放弃
-    }
+    return false;
   }
+}
+
+function mergeTags(existing: string[] = [], incoming: string[] = []): string[] {
+  return Array.from(new Set([...existing, ...incoming]));
+}
+
+function mergeMaterial(existing: Material, incoming: Material): Material {
+  const merged: Material = {
+    ...incoming,
+    createdAt: existing.createdAt,
+    folder: incoming.folder ?? existing.folder,
+  };
+
+  if (existing.atom && incoming.atom) {
+    merged.atom = {
+      ...incoming.atom,
+      ...(("notes" in existing.atom && typeof existing.atom.notes === "string")
+        ? { notes: existing.atom.notes }
+        : {}),
+      tags: mergeTags(existing.atom.tags, incoming.atom.tags),
+    } as typeof incoming.atom;
+  }
+  if (existing.component && incoming.component) {
+    merged.component = {
+      ...incoming.component,
+      notes: existing.component.notes ?? incoming.component.notes,
+      tags: mergeTags(existing.component.tags, incoming.component.tags),
+    };
+  }
+  if (existing.inspiration && incoming.inspiration) {
+    merged.inspiration = {
+      ...incoming.inspiration,
+      ...(("notes" in existing.inspiration &&
+      typeof existing.inspiration.notes === "string")
+        ? { notes: existing.inspiration.notes }
+        : {}),
+      tags: mergeTags(existing.inspiration.tags, incoming.inspiration.tags),
+    } as typeof incoming.inspiration;
+  }
+  return merged;
 }
 
 /**
  * 保存或更新单条素材（按 id upsert）
- * @returns 写入后的素材（含新 updatedAt）
+ * @returns 写入后的素材；失败时返回 null
  */
-export function upsertMaterial(material: Material): Material {
+export function upsertMaterial(
+  material: Material,
+  options: { preserveUserEdits?: boolean } = {}
+): Material | null {
   const all = loadUserMaterials();
   const now = new Date().toISOString();
-  const updated: Material = { ...material, updatedAt: now };
   const idx = all.findIndex((m) => m.id === material.id);
+  const updated: Material = {
+    ...(idx >= 0
+      ? options.preserveUserEdits
+        ? mergeMaterial(all[idx], material)
+        : { ...material, createdAt: all[idx].createdAt }
+      : material),
+    updatedAt: now,
+  };
   if (idx >= 0) {
     all[idx] = updated;
   } else {
     all.push(updated);
   }
-  writeAll(all);
-  return updated;
+  if (!writeAll(all)) return null;
+  return loadUserMaterials().find((item) => item.id === updated.id) ?? null;
 }
 
 /**
