@@ -13,6 +13,7 @@ export interface DraftData {
   html: string; // 编辑器富文本内容
   plainText: string; // 纯文本（用于字数统计和写后分析）
   savedAt: number; // 上次保存时间戳
+  completedAt?: number; // 当前已保存版本的完成时间
 }
 
 /**
@@ -39,7 +40,7 @@ export function saveDraft(data: Omit<DraftData, "savedAt">): number {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(full));
   } catch {
-    // localStorage 满或不可用，静默失败
+    return 0;
   }
   return savedAt;
 }
@@ -50,6 +51,23 @@ export function saveDraft(data: Omit<DraftData, "savedAt">): number {
 export function clearDraft(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
+}
+
+/** 把当前已落盘草稿标记为完成，并复读确认 */
+export function markDraftCompleted(): boolean {
+  if (typeof window === "undefined") return false;
+  const draft = loadDraft();
+  if (!draft) return false;
+  try {
+    const completedAt = Date.now();
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...draft, completedAt })
+    );
+    return loadDraft()?.completedAt === completedAt;
+  } catch {
+    return false;
+  }
 }
 
 /**

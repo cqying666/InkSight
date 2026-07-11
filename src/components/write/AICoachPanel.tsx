@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { trackEvent } from "@/lib/report/analytics";
+import type { CoachContext, CoachReference } from "@/lib/write/coach-context";
 
 /**
  * AI 教练对话面板
@@ -36,11 +37,7 @@ const WELCOME: ChatMessage = {
 };
 
 interface Props {
-  getContext?: () => {
-    title?: string;
-    wordCount?: number;
-    excerpt?: string;
-  };
+  getContext?: () => CoachContext;
   /** 是否在浮窗模式（Cmd+K 唤出） */
   overlay?: boolean;
   onClose?: () => void;
@@ -51,9 +48,16 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
+  const streamContentRef = useRef("");
   const abortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [showReferences, setShowReferences] = useState(false);
+  const [referenceQuery, setReferenceQuery] = useState("");
+  const [availableReferences, setAvailableReferences] = useState<CoachReference[]>([]);
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // 自动滚动到底部
   useEffect(() => {
@@ -66,6 +70,36 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
       inputRef.current?.focus();
     }
   }, [overlay]);
+
+  useEffect(() => {
+    const next = getContext?.().references ?? [];
+    setAvailableReferences(next);
+    const availableIds = new Set(next.map((reference) => reference.id));
+    setSelectedReferenceIds((current) =>
+      new Set(Array.from(current).filter((id) => availableIds.has(id)))
+    );
+  }, [getContext]);
+
+  const refreshReferences = useCallback(() => {
+    const next = getContext?.().references ?? [];
+    setAvailableReferences(next);
+    const availableIds = new Set(next.map((reference) => reference.id));
+    setSelectedReferenceIds((current) =>
+      new Set(Array.from(current).filter((id) => availableIds.has(id)))
+    );
+  }, [getContext]);
+
+  const toggleReference = useCallback((id: string) => {
+    setSelectedReferenceIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < 8) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const handleSend = useCallback(
     async (text?: string) => {
@@ -81,18 +115,39 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
       setInput("");
       setStreaming(true);
       setStreamContent("");
+      streamContentRef.current = "";
 
-      trackEvent("coach_message_sent", { length: content.length });
+      const fullContext = getContext?.();
+      const selectedReferences = availableReferences.filter((reference) =>
+        selectedReferenceIds.has(reference.id)
+      );
+
+      trackEvent("coach_message_sent", {
+        length: content.length,
+        reference_count: selectedReferences.length,
+        reference_ids: selectedReferences.map((reference) => reference.id),
+      });
 
       // 构建 API 请求的消息历史（不含 welcome 欢迎语）
       const apiMessages = [...messages, userMsg]
         .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => ({
+          role: m.role === "coach" ? "assistant" : "user",
+          content: m.content,
+        }))
+        .slice(-29);
 
-      const context = getContext?.();
+      const context = fullContext
+        ? { ...fullContext, references: selectedReferences }
+        : undefined;
 
       const controller = new AbortController();
       abortRef.current = controller;
+      let timedOut = false;
+      const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 45_000);
 
       try {
         const resp = await fetch("/api/coach", {
@@ -124,6 +179,7 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           accumulated += chunk;
+          streamContentRef.current = accumulated;
           setStreamContent(accumulated);
         }
 
@@ -135,12 +191,21 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
         setMessages((prev) => [...prev, coachMsg]);
       } catch (err) {
         if ((err as Error).name === "AbortError") {
-          // 用户主动打断，保留已生成内容
-          if (streamContent) {
+          if (timedOut) {
             const coachMsg: ChatMessage = {
               id: `c-${Date.now()}`,
               role: "coach",
-              content: streamContent,
+              content: "等待回复超时了。你选择的引用还在，可以稍后直接重试。",
+            };
+            setMessages((prev) => [...prev, coachMsg]);
+            return;
+          }
+          // 用户主动打断，保留已生成内容
+          if (streamContentRef.current) {
+            const coachMsg: ChatMessage = {
+              id: `c-${Date.now()}`,
+              role: "coach",
+              content: streamContentRef.current,
             };
             setMessages((prev) => [...prev, coachMsg]);
           }
@@ -153,12 +218,21 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
           setMessages((prev) => [...prev, coachMsg]);
         }
       } finally {
+        window.clearTimeout(timeoutId);
         setStreaming(false);
         setStreamContent("");
+        streamContentRef.current = "";
         abortRef.current = null;
       }
     },
-    [input, streaming, messages, getContext, streamContent]
+    [
+      input,
+      streaming,
+      messages,
+      getContext,
+      selectedReferenceIds,
+      availableReferences,
+    ]
   );
 
   const handleStop = useCallback(() => {
@@ -175,6 +249,10 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
     [handleSend]
   );
 
+  const activeSelectedReferences = availableReferences.filter((reference) =>
+    selectedReferenceIds.has(reference.id)
+  );
+
   return (
     <div className="flex h-full flex-col">
       {/* 对话头 */}
@@ -186,7 +264,9 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
         </span>
         <span className="font-mono text-[10px] text-text-muted">Coach</span>
         <span className="ml-auto font-mono text-[9px] text-text-muted/50">
-          AI 教练
+          {activeSelectedReferences.length > 0
+            ? `已引用 ${activeSelectedReferences.length} 项`
+            : "AI 教练"}
         </span>
         {overlay && onClose && (
           <button
@@ -196,6 +276,101 @@ export function AICoachPanel({ getContext, overlay = false, onClose }: Props) {
           >
             ESC
           </button>
+        )}
+      </div>
+
+      {/* 引用选择器 */}
+      <div className="flex-shrink-0 border-b border-text/[0.06] bg-bg/45 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              refreshReferences();
+              setShowReferences((current) => !current);
+            }}
+            className="rounded-full border border-text/[0.08] bg-surface px-2.5 py-1 text-[10px] text-text-muted transition-colors hover:border-accent/30 hover:text-text"
+          >
+            ＋ 引用文档或素材
+          </button>
+          <span className="truncate text-[9px] text-text-muted/55">
+            {activeSelectedReferences.length > 0
+              ? "发送时会连同选中内容交给教练"
+              : "未选择引用"}
+          </span>
+        </div>
+
+        {activeSelectedReferences.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {activeSelectedReferences.map((reference) => (
+                <button
+                  key={reference.id}
+                  type="button"
+                  onClick={() => toggleReference(reference.id)}
+                  title={`移除引用：${reference.label}`}
+                  className="max-w-full truncate rounded-full bg-accent/[0.08] px-2 py-0.5 text-[9px] text-accent"
+                >
+                  @{reference.label} ×
+                </button>
+              ))}
+          </div>
+        )}
+
+        {showReferences && (
+          <div className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-text/[0.06] bg-surface p-2 shadow-card">
+            <input
+              value={referenceQuery}
+              onChange={(event) => setReferenceQuery(event.target.value)}
+              placeholder="搜索素材名称…"
+              className="mb-2 w-full rounded-lg border border-text/[0.08] bg-bg px-2 py-1.5 text-[11px] text-text outline-none focus:border-accent"
+            />
+            {(["document", "material"] as const).map((kind) => {
+              const items = availableReferences.filter(
+                (reference) =>
+                  reference.kind === kind &&
+                  (!referenceQuery.trim() ||
+                    reference.label.toLowerCase().includes(referenceQuery.trim().toLowerCase()) ||
+                    reference.content.toLowerCase().includes(referenceQuery.trim().toLowerCase()))
+              );
+              if (items.length === 0) return null;
+              return (
+                <div key={kind} className="mb-2 last:mb-0">
+                  <p className="mb-1 px-1 text-[9px] uppercase tracking-[0.12em] text-text-muted/55">
+                    {kind === "document" ? "左侧文档" : "素材库"}
+                  </p>
+                  <div className="space-y-1">
+                    {items.map((reference) => {
+                      const checked = selectedReferenceIds.has(reference.id);
+                      return (
+                        <label
+                          key={reference.id}
+                          className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-bg"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleReference(reference.id)}
+                            className="mt-0.5 accent-primary"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate text-[11px] text-text">{reference.label}</span>
+                            <span className="block truncate text-[9px] text-text-muted/55">
+                              {reference.content.slice(0, 60)}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {availableReferences.length === 0 && (
+              <p className="px-2 py-3 text-center text-[10px] text-text-muted">
+                当前文档和素材库还没有可引用内容。
+              </p>
+            )}
+            <p className="mt-1 px-1 text-[9px] text-text-muted/45">最多同时引用 8 项。</p>
+          </div>
         )}
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Editor } from "@/components/write/Editor";
 import { OutlinePanel } from "@/components/write/OutlinePanel";
@@ -8,6 +8,22 @@ import { WriteAnalysis } from "@/components/write/WriteAnalysis";
 import { WriteNextSteps } from "@/components/write/WriteNextSteps";
 import { AICoachPanel } from "@/components/write/AICoachPanel";
 import type { WriteOutline } from "@/lib/write/outline";
+import { loadOutline } from "@/lib/write/outline";
+import {
+  EMPTY_WORKSPACE_DOCUMENTS,
+  loadWorkspaceDocuments,
+  outlineToCoachText,
+  saveWorkspaceDocuments,
+  seedDocumentsFromAnalysis,
+  type WorkspaceDocumentKey,
+  type WorkspaceDocuments,
+} from "@/lib/write/documents";
+import type { CoachContext } from "@/lib/write/coach-context";
+import { loadAnalysis } from "@/lib/report/session";
+import { loadAllMaterials } from "@/lib/material/catalog";
+import { materialToCoachText } from "@/lib/material/from-analysis";
+import { loadDraft } from "@/lib/write/storage";
+import { WorkspaceDocumentEditor } from "@/components/write/WorkspaceDocumentEditor";
 import { trackEvent } from "@/lib/report/analytics";
 import { createPortal } from "react-dom";
 
@@ -59,9 +75,25 @@ export default function WritePage() {
   const [materialMounted, setMaterialMounted] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [showRightDrawer, setShowRightDrawer] = useState(false);
+  const [documents, setDocuments] = useState<WorkspaceDocuments>(
+    EMPTY_WORKSPACE_DOCUMENTS
+  );
+  const documentsRef = useRef<WorkspaceDocuments>(EMPTY_WORKSPACE_DOCUMENTS);
 
   useEffect(() => {
     setMounted(true);
+    trackEvent("write_entered", {});
+    const storedAnalysis = loadAnalysis();
+    const storedDocuments = loadWorkspaceDocuments();
+    const seeded = seedDocumentsFromAnalysis(
+      storedDocuments,
+      storedAnalysis?.analysis,
+      storedAnalysis?.paragraphs
+    );
+    setDocuments(seeded);
+    documentsRef.current = seeded;
+    saveWorkspaceDocuments(seeded);
+    setOutline(loadOutline());
   }, []);
 
   // 进入 /write 时自动折叠全局导航
@@ -90,10 +122,6 @@ export default function WritePage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const handleEnter = () => {
-    trackEvent("write_entered", {});
-  };
-
   // 获取编辑器内容（供 WriteAnalysis）
   const getEditorHtml = useCallback(() => {
     const el = document.querySelector(".write-editor") as HTMLDivElement | null;
@@ -108,13 +136,55 @@ export default function WritePage() {
   }, []);
 
   // 获取创作上下文（供 AI 教练）
-  const getCoachContext = useCallback(() => {
+  const getCoachContext = useCallback((): CoachContext => {
     const editorEl = document.querySelector(
       ".write-editor"
     ) as HTMLDivElement | null;
-    const excerpt = editorEl?.innerText?.slice(-300) || "";
-    return { title: getTitle(), wordCount, excerpt };
-  }, [getTitle, wordCount]);
+    const draftText = editorEl?.innerText || loadDraft()?.plainText || "";
+    const documentReferences: CoachContext["references"] = [
+      { id: "draft", kind: "document", label: "正文", content: draftText },
+      { id: "benchmark", kind: "document", label: "对标文", content: documents.benchmark },
+      { id: "outline", kind: "document", label: "大纲", content: outlineToCoachText(outline) },
+      { id: "synopsis", kind: "document", label: "细纲", content: documents.synopsis },
+      { id: "characters", kind: "document", label: "人物小传", content: documents.characters },
+    ];
+    const references: CoachContext["references"] = documentReferences.filter(
+      (item) => item.content.trim()
+    );
+
+    loadAllMaterials()
+      .filter((material) => material.favorited || material.source === "manual" || material.source === "teardown")
+      .forEach((material) => {
+        const content = materialToCoachText(material);
+        if (!content) return;
+        references.push({
+          id: `material:${material.id}`,
+          kind: "material",
+          label:
+            material.component?.summary.slice(0, 24) ||
+            material.inspiration?.title.slice(0, 24) ||
+            material.atom?.text.slice(0, 24) ||
+            "素材",
+          content,
+        });
+      });
+
+    return {
+      title: getTitle(),
+      wordCount,
+      references,
+    };
+  }, [documents, getTitle, outline, wordCount]);
+
+  const updateDocument = useCallback(
+    (key: WorkspaceDocumentKey, value: string) => {
+      const next = { ...documentsRef.current, [key]: value };
+      documentsRef.current = next;
+      setDocuments(next);
+      return saveWorkspaceDocuments(next);
+    },
+    []
+  );
 
   // 首次展开素材库时 mount
   const handleExpandMaterial = useCallback(() => {
@@ -125,7 +195,6 @@ export default function WritePage() {
   return (
     <main
       className="flex h-screen flex-col overflow-hidden bg-bg"
-      onMouseEnter={handleEnter}
     >
       {/* ===== 顶部细栏（深度专注时隐藏） ===== */}
       {!deepFocus && (
@@ -251,7 +320,13 @@ export default function WritePage() {
           )}
 
           {activeView === "benchmark" && (
-            <BenchmarkView outline={outline} />
+            <WorkspaceDocumentEditor
+              title="对标文"
+              eyebrow="Benchmark"
+              value={documents.benchmark}
+              placeholder="上传拆文后，原文会自动同步到这里。也可以粘贴新的对标文，并随时编辑批注。"
+              onChange={(value) => updateDocument("benchmark", value)}
+            />
           )}
 
           {activeView === "outline" && (
@@ -263,11 +338,23 @@ export default function WritePage() {
           )}
 
           {activeView === "synopsis" && (
-            <SynopsisView outline={outline} />
+            <WorkspaceDocumentEditor
+              title="细纲"
+              eyebrow="Detailed outline"
+              value={documents.synopsis}
+              placeholder="按章节写下事件推进、情绪变化、卡点与反转。"
+              onChange={(value) => updateDocument("synopsis", value)}
+            />
           )}
 
           {activeView === "characters" && (
-            <CharactersView outline={outline} />
+            <WorkspaceDocumentEditor
+              title="人物小传"
+              eyebrow="Character bible"
+              value={documents.characters}
+              placeholder="记录人物的来处、欲望、恐惧、关系、转折与最终变化。"
+              onChange={(value) => updateDocument("characters", value)}
+            />
           )}
 
           {/* 底部操作区（深度专注时隐藏） */}
@@ -393,11 +480,7 @@ function AICoachOverlay({
   getContext,
 }: {
   onClose: () => void;
-  getContext: () => {
-    title?: string;
-    wordCount?: number;
-    excerpt?: string;
-  };
+  getContext: () => CoachContext;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -428,110 +511,5 @@ function AICoachOverlay({
       </div>
     </div>,
     document.body
-  );
-}
-
-// ===== 对标文视图 =====
-function BenchmarkView({ outline }: { outline: WriteOutline | null }) {
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[680px] px-10 py-8">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="font-serif text-title-lg text-text">对标文</h2>
-          <span className="font-mono text-[10px] text-text-muted">
-            参考作品 · 只读
-          </span>
-        </div>
-        <p className="mb-6 font-mono text-[10px] text-text-muted/60">
-          创作时随时切回此页对照节奏与语气。对标文来自拆文分析的上传原文。
-        </p>
-        <div className="rounded-md border border-text/[0.06] bg-bg-soft p-5">
-          <p className="mb-3 font-serif text-sm text-text-muted">
-            {outline
-              ? "当前对标文为大纲创建时的参考作品。"
-              : "尚未创建大纲，暂无对标文。请先在「大纲」页搭建结构。"}
-          </p>
-          <p className="font-mono text-[10px] text-text-muted/50">
-            提示：上传拆文后，原文会自动同步到此页作为对标参考。
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ===== 细纲视图 =====
-function SynopsisView({ outline }: { outline: WriteOutline | null }) {
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[680px] px-10 py-8">
-        <h2 className="mb-6 font-serif text-title-lg text-text">细纲</h2>
-        {outline ? (
-          <div className="space-y-5">
-            {outline.reversals.map((rev, i) => (
-              <div key={i} className="border-l border-text/[0.06] pl-5">
-                <div className="mb-1.5 flex items-baseline gap-2">
-                  <span className="font-mono text-[10px] text-text-muted/40">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="font-serif text-[15px] font-semibold text-text">
-                    反转节点 · {Math.round(rev.position * 100)}%
-                  </span>
-                </div>
-                <p className="mb-1 text-[13px] leading-[1.6] text-text">
-                  {rev.note || "（未填写描述）"}
-                </p>
-                <p className="font-mono text-[10px] text-text-muted/60">
-                  类型：{rev.type}
-                </p>
-              </div>
-            ))}
-            <div className="border-l border-text/[0.06] pl-5">
-              <div className="mb-1.5 flex items-baseline gap-2">
-                <span className="font-mono text-[10px] text-text-muted/40">
-                  结局
-                </span>
-                <span className="font-serif text-[15px] font-semibold text-text">
-                  {outline.endingType}
-                </span>
-              </div>
-              <p className="font-mono text-[10px] text-text-muted/60">
-                情绪走势：{outline.emotionGoal.trend || "未设定"}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-md border border-text/[0.06] bg-bg-soft p-5 text-center">
-            <p className="font-serif text-sm text-text-muted">
-              尚未创建大纲，无法显示细纲。
-            </p>
-            <p className="mt-1 font-mono text-[10px] text-text-muted/50">
-              请先在「大纲」页搭建结构。
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ===== 人物小传视图 =====
-function CharactersView({ outline }: { outline: WriteOutline | null }) {
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[680px] px-10 py-8">
-        <h2 className="mb-6 font-serif text-title-lg text-text">人物小传</h2>
-        <div className="rounded-md border border-text/[0.06] bg-bg-soft p-5">
-          <p className="font-serif text-sm text-text-muted">
-            {outline
-              ? "当前大纲已创建，可在此页为每个角色建立小传。"
-              : "尚未创建大纲。创建大纲后，可在此页为角色建立详细小传。"}
-          </p>
-          <p className="mt-2 font-mono text-[10px] text-text-muted/50">
-            人物小传功能开发中。目前可通过大纲页记录角色相关信息。
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }

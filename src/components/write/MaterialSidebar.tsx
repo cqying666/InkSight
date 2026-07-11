@@ -658,7 +658,6 @@ function MaterialCard({
     } else if (m.layer === "component" && m.component) {
       // 组件素材：展开详情而非直接插入
       setExpanded((v) => !v);
-      onAdopt(m);
       return;
     } else if (m.layer === "inspiration" && m.inspiration) {
       textToInsert = m.inspiration.text;
@@ -671,9 +670,10 @@ function MaterialCard({
 
     // 恢复光标到编辑器内的选区
     const sel = window.getSelection();
+    let inserted = false;
     if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
       // 光标在编辑器内，直接插入
-      document.execCommand("insertText", false, textToInsert);
+      inserted = document.execCommand("insertText", false, textToInsert);
     } else {
       // 光标不在编辑器内，追加到末尾
       const range = document.createRange();
@@ -681,8 +681,11 @@ function MaterialCard({
       range.collapse(false);
       sel?.removeAllRanges();
       sel?.addRange(range);
-      document.execCommand("insertText", false, textToInsert);
+      inserted = document.execCommand("insertText", false, textToInsert);
     }
+
+    if (!inserted) return;
+    window.dispatchEvent(new Event("inksight:editor-change"));
 
     onAdopt(m);
   }, [m, onAdopt]);
@@ -775,9 +778,19 @@ function MaterialCard({
               if (!editor || !m.component?.summary) return;
               editor.focus();
               const sel = window.getSelection();
+              let inserted = false;
               if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-                document.execCommand("insertText", false, `\n【${m.component.summary}】\n`);
+                inserted = document.execCommand("insertText", false, `\n【${m.component.summary}】\n`);
+              } else {
+                const range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+                inserted = document.execCommand("insertText", false, `\n【${m.component.summary}】\n`);
               }
+              if (!inserted) return;
+              window.dispatchEvent(new Event("inksight:editor-change"));
               onAdopt(m);
             }}
             className="mt-1 rounded-sm border border-primary px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/[0.05]"

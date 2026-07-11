@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import {
   loadDraft,
+  markDraftCompleted,
   saveDraft,
   formatSavedAt,
   SAVE_INTERVAL_MS,
@@ -40,12 +41,15 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
   const [dirty, setDirty] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
   // P5-T3: 专注模式状态持久化
   const FOCUS_KEY = "inksight:write:focus";
 
   // 持久化到 localStorage 的标志，避免 SSR 不一致
   const hasLoadedRef = useRef(false);
+  const writingStartedRef = useRef(false);
 
   // ===== 初始化：加载草稿 + 专注模式状态 =====
   useEffect(() => {
@@ -55,6 +59,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
       if (titleRef.current) titleRef.current.value = draft.title;
       if (editorRef.current) editorRef.current.innerHTML = draft.html;
       setSavedAt(draft.savedAt);
+      setCompleted(Boolean(draft.completedAt));
       const html = editorRef.current?.innerHTML || "";
       setWordCount(countWords(htmlToPlainText(html)));
     }
@@ -85,14 +90,22 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
 
   // ===== 保存 =====
   const handleSave = useCallback(() => {
-    if (!hasLoadedRef.current) return;
+    if (!hasLoadedRef.current) return false;
     const title = titleRef.current?.value || "";
     const html = editorRef.current?.innerHTML || "";
     const plainText = htmlToPlainText(html);
-    if (!title && !plainText) return; // 空内容不保存
+    if (!title && !plainText) return false; // 空内容不保存
     const ts = saveDraft({ title, html, plainText });
-    setSavedAt(ts);
-    setDirty(false);
+    if (ts > 0) {
+      setSavedAt(ts);
+      setDirty(false);
+      setSaveError(false);
+      trackEvent("draft_saved", { word_count: countWords(plainText) });
+      return true;
+    } else {
+      setSaveError(true);
+      return false;
+    }
   }, []);
 
   // ===== 自动保存：30s 间隔 =====
@@ -110,9 +123,42 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
 
   // ===== 内容变化 =====
   const handleInput = useCallback(() => {
+    if (!writingStartedRef.current) {
+      writingStartedRef.current = true;
+      trackEvent("writing_started", {});
+    }
     setDirty(true);
+    if (completed) setCompleted(false);
+    setSaveError(false);
     updateStats();
-  }, [updateStats]);
+  }, [completed, updateStats]);
+
+  const handleTitleChange = useCallback(() => {
+    if (!writingStartedRef.current) {
+      writingStartedRef.current = true;
+      trackEvent("writing_started", {});
+    }
+    setDirty(true);
+    if (completed) setCompleted(false);
+    setSaveError(false);
+  }, [completed]);
+
+  useEffect(() => {
+    const handleExternalChange = () => handleInput();
+    window.addEventListener("inksight:editor-change", handleExternalChange);
+    return () => window.removeEventListener("inksight:editor-change", handleExternalChange);
+  }, [handleInput]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [handleSave]);
 
   // ===== 富文本格式化命令 =====
   const execCmd = useCallback((command: string, value?: string) => {
@@ -144,6 +190,26 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
     document.execCommand("insertHorizontalRule");
     handleInput();
   }, [handleInput]);
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const plainText = event.clipboardData.getData("text/plain");
+      document.execCommand("insertText", false, plainText);
+      handleInput();
+    },
+    [handleInput]
+  );
+
+  const markCompleted = useCallback(() => {
+    if (!handleSave()) return;
+    if (!markDraftCompleted()) {
+      setSaveError(true);
+      return;
+    }
+    setCompleted(true);
+    trackEvent("draft_completed", { word_count: wordCount });
+  }, [handleSave, wordCount]);
 
   // ===== 全屏专注模式（P5-T3：状态持久化）=====
   const toggleFocusMode = useCallback(() => {
@@ -194,7 +260,9 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
           <span>约 {readingTime} 分钟阅读</span>
           <span>·</span>
           <span>
-            {dirty ? (
+            {saveError ? (
+              <span className="text-primary">保存失败，请检查浏览器存储后重试</span>
+            ) : dirty ? (
               <span className="text-accent">编辑中…</span>
             ) : savedAt ? (
               <span>已保存 {formatSavedAt(savedAt)}</span>
@@ -203,13 +271,31 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
             )}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={toggleFocusMode}
-          className="rounded-sm border border-text px-3 py-1 font-serif text-xs text-text transition-colors hover:border-primary hover:text-primary"
-        >
-          {focusMode ? "退出专注" : "专注模式"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!dirty && !saveError}
+            className="rounded-sm border border-text/[0.12] px-3 py-1 font-serif text-xs text-text transition-colors hover:border-primary hover:text-primary disabled:opacity-35"
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            onClick={markCompleted}
+            disabled={wordCount === 0 || completed}
+            className="rounded-sm border border-accent/30 px-3 py-1 font-serif text-xs text-accent transition-colors hover:bg-accent/[0.05] disabled:opacity-35"
+          >
+            {completed ? "已标记完成" : "标记完成"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleFocusMode}
+            className="rounded-sm border border-text px-3 py-1 font-serif text-xs text-text transition-colors hover:border-primary hover:text-primary"
+          >
+            {focusMode ? "退出专注" : "专注模式"}
+          </button>
+        </div>
       </div>
 
       {/* 工具栏 */}
@@ -221,11 +307,34 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
           <ToolbarButton onClick={() => execCmd("italic")} label="斜体" shortcut="⌘I">
             <em>I</em>
           </ToolbarButton>
+          <ToolbarButton onClick={() => execCmd("strikeThrough")} label="删除线">
+            <span className="line-through">S</span>
+          </ToolbarButton>
           <ToolbarButton
             onClick={() => execCmd("formatBlock", "blockquote")}
             label="引用"
           >
             <span className="font-serif">&ldquo;</span>
+          </ToolbarButton>
+          <div className="mx-1 h-4 w-px bg-text" />
+          <ToolbarButton onClick={() => execCmd("undo")} label="撤销" shortcut="⌘Z">
+            <span className="text-xs">↶</span>
+          </ToolbarButton>
+          <ToolbarButton onClick={() => execCmd("redo")} label="重做" shortcut="⇧⌘Z">
+            <span className="text-xs">↷</span>
+          </ToolbarButton>
+          <div className="mx-1 h-4 w-px bg-text" />
+          <ToolbarButton onClick={() => execCmd("formatBlock", "h2")} label="二级标题">
+            <span className="text-[10px]">H2</span>
+          </ToolbarButton>
+          <ToolbarButton onClick={() => execCmd("insertUnorderedList")} label="项目列表">
+            <span className="text-xs">•≡</span>
+          </ToolbarButton>
+          <ToolbarButton onClick={() => execCmd("insertOrderedList")} label="编号列表">
+            <span className="text-[10px]">1≡</span>
+          </ToolbarButton>
+          <ToolbarButton onClick={() => execCmd("removeFormat")} label="清除格式">
+            <span className="text-[10px]">Tx</span>
           </ToolbarButton>
           <div className="mx-1 h-4 w-px bg-text" />
           <ToolbarButton onClick={insertChapter} label="插入章节">
@@ -244,7 +353,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
           type="text"
           placeholder="作品标题…"
           onBlur={handleBlur}
-          onChange={() => setDirty(true)}
+          onChange={handleTitleChange}
           className="w-full border-none bg-transparent font-serif text-3xl font-semibold text-text outline-none placeholder:text-text-muted"
         />
       </div>
@@ -263,6 +372,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline }: Props)
           suppressContentEditableWarning
           onInput={handleInput}
           onBlur={handleBlur}
+          onPaste={handlePaste}
           className="write-editor min-h-[55vh] flex-1 font-serif text-[17px] leading-[1.9] text-text outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-text-muted [&_.chapter-title]:mt-6 [&_.chapter-title]:border-b [&_.chapter-title]:border-accent [&_.chapter-title]:pb-1 [&_.chapter-title]:font-serif [&_.chapter-title]:text-xl [&_.chapter-title]:font-semibold [&_hr]:my-4 [&_hr]:border-none [&_hr]:text-center [&_hr]:before:content-['* * *'] [&_hr]:before:text-text-muted [&_p]:my-1.5"
           data-placeholder="开始写作…"
         />
