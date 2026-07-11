@@ -7,6 +7,7 @@ import { MOCK_ANALYSIS, MOCK_PARAGRAPHS } from "@/lib/report/mock-data";
 import { loadAnalysis, clearAnalysis } from "@/lib/report/session";
 import { trackEvent } from "@/lib/report/analytics";
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
+import { MaterialDepositPanel } from "@/components/report/MaterialDepositPanel";
 
 const XrayReport = dynamic(
   () => import("@/components/report/XrayReport").then((m) => m.XrayReport),
@@ -34,6 +35,7 @@ type State =
       status: "ready";
       analysis: AnalysisResult;
       paragraphs: string[];
+      reportId: string;
       isMock: boolean;
     };
 
@@ -51,6 +53,7 @@ export default function ReportPage() {
         status: "ready",
         analysis: stored.analysis,
         paragraphs: stored.paragraphs,
+        reportId: stored.reportId,
         isMock: false,
       });
       trackEvent("report_viewed", { is_mock: false });
@@ -59,6 +62,7 @@ export default function ReportPage() {
         status: "ready",
         analysis: MOCK_ANALYSIS,
         paragraphs: MOCK_PARAGRAPHS,
+        reportId: "mock-report",
         isMock: true,
       });
       trackEvent("report_demo_viewed", {});
@@ -221,6 +225,12 @@ export default function ReportPage() {
         )}
 
         <XrayReport analysis={state.analysis} paragraphs={state.paragraphs} />
+
+        <MaterialDepositPanel
+          analysis={state.analysis}
+          reportId={state.reportId}
+          disabled={state.isMock}
+        />
 
         {/* 下一步行动引导 */}
         <section className="no-print mt-10" aria-label="下一步行动">

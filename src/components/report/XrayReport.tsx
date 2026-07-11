@@ -155,13 +155,15 @@ export function XrayReport({ analysis, paragraphs }: Props) {
             <div className="mb-4 text-xs uppercase tracking-[0.15em] text-text-muted">
               原文（{paragraphs.length} 段）
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {paragraphs.map((p, i) => (
                 <div key={i} className="flex gap-3">
-                  <span className="shrink-0 font-mono text-xs text-text-muted">
+                  <span className="shrink-0 font-mono text-xs leading-[1.85] text-text-muted">
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  <p className="flex-1 text-sm leading-relaxed text-text">{p}</p>
+                  <p className="flex-1 whitespace-pre-wrap font-serif text-[15px] leading-[1.85] text-text">
+                    {p}
+                  </p>
                 </div>
               ))}
             </div>

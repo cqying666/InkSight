@@ -81,7 +81,7 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 // ===== 1. 编辑视角速看 =====
 
 function EditorView({ data }: { data: PlotAnalysis["editorView"] }) {
-  const { basicInfo, guideAnalysis, sentenceAnalysis, guideReview, entryPoint, payPoint, deepTeardownJudgment } = data;
+  const { basicInfo, guideAnalysis, sentenceAnalysis, payPoint } = data;
 
   return (
     <div className="space-y-5">
@@ -106,9 +106,8 @@ function EditorView({ data }: { data: PlotAnalysis["editorView"] }) {
 
       {/* 导语分析 */}
       <Card>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3">
           <span className="text-xs uppercase tracking-[0.15em] text-text-muted">导语分析</span>
-          <BoolTag value={guideAnalysis.exists} yesText="有导语" noText="无导语" />
         </div>
         <div className="space-y-2">
           <Field label="边界判断" value={guideAnalysis.boundaryJudgment} />
@@ -129,77 +128,34 @@ function EditorView({ data }: { data: PlotAnalysis["editorView"] }) {
       {/* 逐句分析 */}
       {sentenceAnalysis.length > 0 && (
         <Card>
-          <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">导语逐句拆解</div>
-          <div className="space-y-3">
+          <div className="mb-4 text-xs uppercase tracking-[0.15em] text-text-muted">导语逐句拆解</div>
+          <div className="space-y-0 divide-y divide-border/40">
             {sentenceAnalysis.map((s, i) => (
-              <div key={i} className="border-l-2 border-accent pl-3">
-                <p className="font-serif text-sm italic leading-relaxed text-text">「{s.sentence}」</p>
-                <p className="mt-1 text-xs leading-relaxed text-text-muted">{s.function}</p>
+              <div key={i} className="grid grid-cols-1 gap-2 py-3.5 sm:grid-cols-2 sm:gap-6">
+                <p className="border-l-2 border-accent/40 pl-3 font-serif text-sm leading-[1.7] text-text">
+                  {s.sentence}
+                </p>
+                <p className="text-xs leading-[1.7] text-text-muted">
+                  {s.function}
+                </p>
               </div>
             ))}
           </div>
         </Card>
       )}
 
-      {/* 导语复核 */}
+      {/* 付费点 */}
       <Card>
-        <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">导语复核</div>
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          <BoolTag value={guideReview.firstSentenceCatchy} yesText="首句抓人" noText="首句待加强" />
-          <BoolTag value={guideReview.quickProtagonist} yesText="快速立人设" noText="人设偏慢" />
-          <BoolTag value={guideReview.quickRelations} yesText="快速立关系" noText="关系偏慢" />
-          <BoolTag value={guideReview.quickConflict} yesText="快速立冲突" noText="冲突偏慢" />
-          <BoolTag value={guideReview.strongContrast} yesText="反差强烈" noText="反差不足" />
-          <BoolTag value={guideReview.clearPainPoint} yesText="痛点清晰" noText="痛点模糊" />
-          <BoolTag value={guideReview.promisesSatisfaction} yesText="承诺爽点" noText="未承诺爽点" />
-          <BoolTag value={guideReview.holdsQuestion} yesText="留住悬念" noText="悬念不足" />
-        </div>
+        <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">付费点</div>
         <div className="space-y-2">
-          <Field label="最有价值的句子" value={guideReview.mostValuableSentence} />
-          <Field label="可删除的句子" value={guideReview.deletableSentence} />
-          <Field label="导语模式" value={guideReview.guideModel} />
+          <Field label="位置" value={payPoint.position} />
+          <Field label="前置冲突" value={payPoint.precedingConflict} />
+          <Field label="卡点类型" value={payPoint.cardType} />
         </div>
-      </Card>
-
-      {/* 入口点 + 付费点 */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Card>
-          <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">入口点</div>
-          <Field label="第一章事件" value={entryPoint.firstChapterEvent} />
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <BoolTag value={entryPoint.connectsGuide} yesText="衔接导语" noText="未衔接导语" />
-            <BoolTag value={entryPoint.amplifiesConflict} yesText="放大冲突" noText="未放大冲突" />
-            <BoolTag value={entryPoint.establishesRelations} yesText="确立关系" noText="未确立关系" />
-            <BoolTag value={entryPoint.givesDirection} yesText="给出方向" noText="方向不明" />
-          </div>
-        </Card>
-        <Card>
-          <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">付费点</div>
-          <div className="space-y-2">
-            <Field label="位置" value={payPoint.position} />
-            <Field label="前置冲突" value={payPoint.precedingConflict} />
-            <Field label="卡点类型" value={payPoint.cardType} />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <BoolTag value={payPoint.naturallyGrown} yesText="自然生成" noText="生硬" />
-            <BoolTag value={payPoint.infoGapRemaining} yesText="留有信息差" noText="信息差不足" />
-            <BoolTag value={payPoint.readerWaiting} yesText="读者在等" noText="读者等待感弱" />
-          </div>
-        </Card>
-      </div>
-
-      {/* 深拆判断 */}
-      <Card className="border-l-4 border-l-accent">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-xs uppercase tracking-[0.15em] text-text-muted">深拆判断</span>
-          <Tag tone="yes">{deepTeardownJudgment.conclusion}</Tag>
-        </div>
-        <div className="space-y-2">
-          <Field label="切入点是否够炸" value={deepTeardownJudgment.entryExplosive} />
-          <Field label="反派是否有辨识度" value={deepTeardownJudgment.antagonistDistinctive} />
-          <Field label="付费点是否自然" value={deepTeardownJudgment.payPointNatural} />
-          <Field label="平台匹配度" value={deepTeardownJudgment.platformMatch} />
-          <Field label="理由" value={deepTeardownJudgment.reason} />
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <BoolTag value={payPoint.naturallyGrown} yesText="自然生成" noText="生硬" />
+          <BoolTag value={payPoint.infoGapRemaining} yesText="留有信息差" noText="信息差不足" />
+          <BoolTag value={payPoint.readerWaiting} yesText="读者在等" noText="读者等待感弱" />
         </div>
       </Card>
     </div>
