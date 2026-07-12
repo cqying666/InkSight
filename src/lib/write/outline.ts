@@ -174,28 +174,34 @@ export function outlineFromTeardown(plot: {
   };
 }
 
-export function loadOutline(): WriteOutline | null {
+export async function loadOutline(): Promise<WriteOutline | null> {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(OUTLINE_KEY);
-    return raw ? (JSON.parse(raw) as WriteOutline) : null;
+    const res = await fetch(`/api/writing-documents?key=${OUTLINE_KEY}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data ? (data as WriteOutline) : null;
   } catch {
     return null;
   }
 }
 
-export function saveOutline(outline: WriteOutline): void {
+export async function saveOutline(outline: WriteOutline): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(OUTLINE_KEY, JSON.stringify(outline));
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: OUTLINE_KEY, data: outline }),
+    });
   } catch {
     // ignore
   }
 }
 
-export function clearOutline(): void {
+export async function clearOutline(): Promise<void> {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(OUTLINE_KEY);
+  await fetch(`/api/writing-documents?key=${OUTLINE_KEY}`, { method: "DELETE" });
 }
 
 export { OUTLINE_KEY };

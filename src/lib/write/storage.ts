@@ -1,77 +1,151 @@
 /**
- * P5-T1 创作工作台存储层
+ * 创作工作台存储层
  *
+ * 从 localStorage 迁移到 SQLite（通过 /api/writing-documents API）。
+ * 所有 I/O 函数均为 async。
  * 自动保存策略：每 30s + 失焦时保存
- * 存储到 localStorage，键名 inksight:write:draft
+ *
+ * 作品列表（works）：用户保存确认后归档，key="works"，data 为 WorkData[]
  */
 
-const STORAGE_KEY = "inksight:write:draft";
+const DOC_KEY = "draft";
+const WORKS_KEY = "works";
 const SAVE_INTERVAL_MS = 30_000;
 
 export interface DraftData {
+  id: string; // 稳定标识，首次保存时生成
   title: string;
-  html: string; // 编辑器富文本内容
-  plainText: string; // 纯文本（用于字数统计和写后分析）
-  savedAt: number; // 上次保存时间戳
-  completedAt?: number; // 当前已保存版本的完成时间
+  html: string;
+  plainText: string;
+  savedAt: number;
+  completedAt?: number;
 }
+
+/** 作品数据（与草稿结构一致，归档后存入 works 列表） */
+export type WorkData = DraftData;
 
 /**
  * 加载草稿
  */
-export function loadDraft(): DraftData | null {
-  if (typeof window === "undefined") return null;
+export async function loadDraft(): Promise<DraftData | null> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as DraftData;
+    const res = await fetch(`/api/writing-documents?key=${DOC_KEY}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data) return null;
+    return data as DraftData;
   } catch {
     return null;
   }
 }
 
 /**
- * 保存草稿
+ * 保存草稿（首次保存自动生成 id）
  */
-export function saveDraft(data: Omit<DraftData, "savedAt">): number {
-  if (typeof window === "undefined") return 0;
+export async function saveDraft(
+  data: Omit<DraftData, "savedAt" | "id"> & { id?: string }
+): Promise<{ savedAt: number; id: string }> {
   const savedAt = Date.now();
-  const full: DraftData = { ...data, savedAt };
+  const id = data.id || generateId();
+  const full: DraftData = { ...data, id, savedAt };
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(full));
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: DOC_KEY, data: full }),
+    });
   } catch {
-    return 0;
+    // 静默
   }
-  return savedAt;
+  return { savedAt, id };
 }
 
 /**
  * 清除草稿
  */
-export function clearDraft(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
+export async function clearDraft(): Promise<void> {
+  await fetch(`/api/writing-documents?key=${DOC_KEY}`, { method: "DELETE" });
 }
 
-/** 把当前已落盘草稿标记为完成，并复读确认 */
-export function markDraftCompleted(): boolean {
-  if (typeof window === "undefined") return false;
-  const draft = loadDraft();
+/** 把当前已落盘草稿标记为完成，并归档到作品列表 */
+export async function markDraftCompleted(): Promise<boolean> {
+  const draft = await loadDraft();
   if (!draft) return false;
+  const completedAt = Date.now();
+  const updated: DraftData = { ...draft, completedAt };
   try {
-    const completedAt = Date.now();
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ ...draft, completedAt })
-    );
-    return loadDraft()?.completedAt === completedAt;
+    // 1. 更新草稿状态
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: DOC_KEY, data: updated }),
+    });
+    // 2. 归档到作品列表
+    await upsertWork(updated);
+    return true;
   } catch {
     return false;
   }
 }
 
+// ===== 作品列表 CRUD =====
+
+/** 加载所有作品（按完成时间倒序） */
+export async function loadWorks(): Promise<WorkData[]> {
+  try {
+    const res = await fetch(`/api/writing-documents?key=${WORKS_KEY}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return (data as WorkData[]).sort((a, b) => {
+      const ta = a.completedAt ?? a.savedAt;
+      const tb = b.completedAt ?? b.savedAt;
+      return tb - ta;
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** 新增或更新一条作品（按 id upsert） */
+export async function upsertWork(work: WorkData): Promise<void> {
+  const works = await loadWorks();
+  const idx = works.findIndex((w) => w.id === work.id);
+  if (idx >= 0) {
+    works[idx] = work;
+  } else {
+    works.unshift(work);
+  }
+  await fetch("/api/writing-documents", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: WORKS_KEY, data: works }),
+  });
+}
+
+/** 删除一条作品（按 id） */
+export async function deleteWork(id: string): Promise<void> {
+  const works = await loadWorks();
+  const filtered = works.filter((w) => w.id !== id);
+  await fetch("/api/writing-documents", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: WORKS_KEY, data: filtered }),
+  });
+}
+
+// ===== 工具函数 =====
+
+export function generateId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
 /**
- * 格式化保存时间为可读字符串
+ * 格式化保存时间为可读字符串（纯函数）
  */
 export function formatSavedAt(savedAt: number | null): string {
   if (!savedAt) return "";
@@ -81,4 +155,4 @@ export function formatSavedAt(savedAt: number | null): string {
   return `${hh}:${mm}`;
 }
 
-export { SAVE_INTERVAL_MS, STORAGE_KEY };
+export { SAVE_INTERVAL_MS };

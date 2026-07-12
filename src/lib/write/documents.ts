@@ -1,7 +1,14 @@
+/**
+ * 创作工作台文档存储
+ *
+ * 从 localStorage 迁移到 SQLite（通过 /api/writing-documents API）。
+ * I/O 函数为 async，纯函数保持同步。
+ */
+
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
 import type { WriteOutline } from "./outline";
 
-const STORAGE_KEY = "inksight:write:documents";
+const DOC_KEY = "documents";
 
 export type WorkspaceDocumentKey = "benchmark" | "synopsis" | "characters";
 
@@ -13,12 +20,16 @@ export const EMPTY_WORKSPACE_DOCUMENTS: WorkspaceDocuments = {
   characters: "",
 };
 
-export function loadWorkspaceDocuments(): WorkspaceDocuments {
-  if (typeof window === "undefined") return { ...EMPTY_WORKSPACE_DOCUMENTS };
+/**
+ * 加载工作台文档
+ */
+export async function loadWorkspaceDocuments(): Promise<WorkspaceDocuments> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...EMPTY_WORKSPACE_DOCUMENTS };
-    const parsed = JSON.parse(raw) as Partial<WorkspaceDocuments>;
+    const res = await fetch(`/api/writing-documents?key=${DOC_KEY}`);
+    if (!res.ok) return { ...EMPTY_WORKSPACE_DOCUMENTS };
+    const data = await res.json();
+    if (!data) return { ...EMPTY_WORKSPACE_DOCUMENTS };
+    const parsed = data as Partial<WorkspaceDocuments>;
     return {
       benchmark: parsed.benchmark ?? "",
       synopsis: parsed.synopsis ?? "",
@@ -29,17 +40,27 @@ export function loadWorkspaceDocuments(): WorkspaceDocuments {
   }
 }
 
-export function saveWorkspaceDocuments(documents: WorkspaceDocuments): boolean {
-  if (typeof window === "undefined") return false;
+/**
+ * 保存工作台文档
+ */
+export async function saveWorkspaceDocuments(
+  documents: WorkspaceDocuments
+): Promise<boolean> {
   try {
-    const serialized = JSON.stringify(documents);
-    localStorage.setItem(STORAGE_KEY, serialized);
-    return localStorage.getItem(STORAGE_KEY) === serialized;
+    const res = await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: DOC_KEY, data: documents }),
+    });
+    return res.ok;
   } catch {
     return false;
   }
 }
 
+/**
+ * 从分析结果填充文档（纯函数，同步）
+ */
 export function seedDocumentsFromAnalysis(
   current: WorkspaceDocuments,
   analysis: AnalysisResult | undefined,
@@ -72,6 +93,9 @@ export function seedDocumentsFromAnalysis(
   return next;
 }
 
+/**
+ * 大纲转教练上下文文本（纯函数，同步）
+ */
 export function outlineToCoachText(outline: WriteOutline | null): string {
   if (!outline) return "";
   const reversals = outline.reversals
@@ -91,5 +115,3 @@ export function outlineToCoachText(outline: WriteOutline | null): string {
     .filter(Boolean)
     .join("\n");
 }
-
-export { STORAGE_KEY as WORKSPACE_DOCUMENTS_KEY };

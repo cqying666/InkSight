@@ -1,38 +1,23 @@
 /**
- * P6-T2 拆文历史持久化
+ * 拆文历史持久化
  *
- * 背景：原 sessionStorage 只存最新一次 feedback，新拆解覆盖旧的，
- * 无法回溯用户拆过哪些作品 + 各次的薄弱点，导致 P6-T2 个性化推荐无据可依。
- *
- * 本模块用 localStorage 累积存"拆文历史摘要"（不含原文，仅类型 + 薄弱点 + 标题），
- * 上限 50 条 FIFO，单条 <1KB，总占用 <50KB。
- *
- * 与 Supabase 的关系：当前为本地轻量版，后端上线后只需把此 localStorage 迁移到
- * PostgreSQL 表（teardown_history），前端推荐逻辑零重构。
+ * 从 localStorage 迁移到 SQLite（通过 /api/teardown-history API）。
+ * 所有 I/O 函数均为 async。
  */
 
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
 
-const STORAGE_KEY = "inksight:teardown_history";
-const MAX_ENTRIES = 50;
-
 export interface TeardownHistoryEntry {
-  /** 拆解时间戳 ISO */
   ts: string;
-  /** 作品类型（从拆文分析 basicInfo.type 提取） */
   type: string;
-  /** 作品标题 */
   title: string;
-  /** 一句话总结 */
   summary: string;
-  /** 核心吸引力 */
   coreAttraction: string;
-  /** 拆文来源 reportId */
   reportId: string;
 }
 
 /**
- * 从 AnalysisResult 提取历史摘要条目
+ * 从 AnalysisResult 提取历史摘要条目（纯函数，同步）
  */
 export function buildHistoryEntry(
   analysis: AnalysisResult,
@@ -54,51 +39,43 @@ export function buildHistoryEntry(
 /**
  * 读取全部拆文历史（FIFO 顺序，最旧在前）
  */
-export function readTeardownHistory(): TeardownHistoryEntry[] {
-  if (typeof window === "undefined") return [];
+export async function readTeardownHistory(): Promise<TeardownHistoryEntry[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
+    const res = await fetch("/api/teardown-history");
+    if (!res.ok) return [];
+    const arr = await res.json();
+    return Array.isArray(arr) ? arr : [];
   } catch {
     return [];
   }
 }
 
 /**
- * 追加一条拆文历史，自动 FIFO 截断到 MAX_ENTRIES
+ * 追加一条拆文历史，自动 FIFO 截断
  */
-export function appendTeardownHistory(
+export async function appendTeardownHistory(
   entry: TeardownHistoryEntry
-): TeardownHistoryEntry[] {
-  if (typeof window === "undefined") return [];
-  const current = readTeardownHistory();
-  const next = [...current, entry].slice(-MAX_ENTRIES);
+): Promise<void> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    await fetch("/api/teardown-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry),
+    });
   } catch {
-    // localStorage 满或被禁用，静默降级
+    // 静默降级
   }
-  return next;
 }
 
 /**
- * 清空拆文历史（用户主动清除）
+ * 清空拆文历史
  */
-export function clearTeardownHistory(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // 静默
-  }
+export async function clearTeardownHistory(): Promise<void> {
+  await fetch("/api/teardown-history", { method: "DELETE" });
 }
 
 /**
- * 统计作品类型频次，返回 Top N
- * 用于个性化推荐
+ * 统计作品类型频次，返回 Top N（纯函数，同步）
  */
 export function aggregateWeakAreas(
   history: TeardownHistoryEntry[],
