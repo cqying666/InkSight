@@ -7,6 +7,8 @@ const nextConfig = {
         ? { exclude: ["error"] }
         : false,
   },
+  // better-sqlite3 是 native 模块，不打包进 bundle
+  serverExternalPackages: ["better-sqlite3"],
   experimental: {
     // barrel index 优化，避免全量打包
     optimizePackageImports: ["@/lib/material", "@/lib/trend"],
