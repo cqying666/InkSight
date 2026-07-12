@@ -29,18 +29,24 @@ export function useUserProfile(): UserProfile | null {
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    const compute = () => {
-      const events = peekEvents();
+    let cancelled = false;
+    const compute = async () => {
+      const events = await peekEvents();
+      if (cancelled) return;
       const base = computeUserProfile(events);
       // P6-T2 合并薄弱点历史（critical×3 + warning×1 加权 Top 3）
-      const history = readTeardownHistory();
+      const history = await readTeardownHistory();
+      if (cancelled) return;
       const weakAreas = aggregateWeakAreas(history, 3);
       setProfile({ ...base, weakAreas });
     };
-    compute();
+    void compute();
     // 窗口重新聚焦时刷新（用户可能在新标签页产生了事件）
     window.addEventListener("focus", compute);
-    return () => window.removeEventListener("focus", compute);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", compute);
+    };
   }, []);
 
   return profile;

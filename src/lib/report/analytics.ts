@@ -1,17 +1,12 @@
 /**
- * 用户行为埋点 (P2-T9)
+ * 用户行为埋点
  *
- * 对齐 PRD 7.3 关键事件 + 特性表第 10 项（建议采纳/报告导出/评分/素材收藏/趋势关注）。
- *
- * 实现：轻量 localStorage 队列。
- *  - 事件先入队列，便于离线演示与未来批量上报
- *  - 提供 flush() 钩子，后续接入 /api/analytics 时零重构
- *  - SSR 安全（typeof window 检查）
- *  - 失败静默，绝不影响主流程
+ * 从 localStorage 迁移到 SQLite（通过 /api/analytics API）。
+ * trackEvent 保持同步（推入内存 buffer），debounce 500ms 批量 POST 到 API。
+ * peekEvents/drainEvents 改为 async。
  */
 
 export type AnalyticsEventName =
-  // PRD 7.3
   | "novel_uploaded"
   | "analysis_completed"
   | "suggestion_adopted"
@@ -27,42 +22,42 @@ export type AnalyticsEventName =
   | "draft_saved"
   | "material_deposit_confirmed"
   | "material_deposit_skipped"
-  // 特性表第 10 项补充
   | "report_exported"
   | "report_rated"
   | "report_viewed"
-  // 解析/降级过程
   | "file_uploaded"
   | "file_parse_failed"
   | "upload_submitted"
   | "analysis_failed"
   | "analysis_retry"
+  | "analysis_auto_retry"
   | "report_demo_viewed"
   | "material_extract_failed"
-  // Phase 5 创作工作台
+  | "example_save_failed"
   | "write_entered"
   | "write_focus_mode_toggled"
   | "write_analyzed"
   | "write_outline_created"
-  // Phase 4 趋势采集
   | "trend_classified"
-  // Phase 6 P6-T8 各模块评分（覆盖 PRD §6 全模块体验评估）
   | "trend_rated"
   | "material_rated"
   | "write_rated"
   | "write_view_changed"
-  | "coach_message_sent";
+  | "coach_message_sent"
+  | "stuck_bubble_shown"
+  | "stuck_bubble_clicked"
+  | "newcomer_guide_dismissed"
+  | "works_viewed"
+  | "work_deleted"
+  | "work_exported";
 
 export interface AnalyticsEvent {
   name: AnalyticsEventName;
-  /** ISO 时间戳 */
   ts: string;
-  /** 匿名会话 ID（每次访问生成，不关联个人身份） */
   sid: string;
   props: Record<string, unknown>;
 }
 
-const QUEUE_KEY = "inksight:analytics_queue";
 const SID_KEY = "inksight:sid";
 
 function getSessionId(): string {
@@ -77,74 +72,55 @@ function getSessionId(): string {
   return sid;
 }
 
-function readQueue(): AnalyticsEvent[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as AnalyticsEvent[]) : [];
-  } catch {
-    return [];
-  }
-}
+// ===== in-memory buffer + debounce flush =====
 
-function writeQueue(events: AnalyticsEvent[]) {
-  if (typeof window === "undefined") return;
-  try {
-    // 上限 500 条，超出丢弃最旧
-    const trimmed = events.slice(-500);
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(trimmed));
-  } catch {
-    // 容量满：丢弃一半再写
-    try {
-      localStorage.setItem(
-        QUEUE_KEY,
-        JSON.stringify(events.slice(-250))
-      );
-    } catch {
-      // 静默放弃
-    }
-  }
-}
-
-/**
- * P6-T9 性能优化：in-memory buffer + debounce flush
- *
- * 原实现每次 trackEvent 都 readQueue(JSON.parse)→push→writeQueue(JSON.stringify)，
- * 500 条事件体积 50-200KB，高频事件（如写作时）会阻塞主线程。
- *
- * 新实现：
- *  - trackEvent 只推入 in-memory buffer，O(1) 不阻塞
- *  - debounce 500ms 后批量 flush 到 localStorage
- *  - 页面卸载前（visibilitychange/beforeunload）立即 flush 避免丢事件
- *  - peekEvents/drainEvents 合并 buffer + localStorage 保证读一致
- */
 const buffer: AnalyticsEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
+let flushing = false;
 const FLUSH_DELAY = 500;
 
 function scheduleFlush(): void {
   if (typeof window === "undefined") return;
-  if (flushTimer) return; // 已有待执行的 flush
+  if (flushTimer) return;
   flushTimer = setTimeout(() => {
     flushTimer = undefined;
-    flushToStorage();
+    void flushToServer();
   }, FLUSH_DELAY);
 }
 
-function flushToStorage(): void {
+async function flushToServer(): Promise<void> {
   if (typeof window === "undefined") return;
+  if (flushing) return;
   if (buffer.length === 0) return;
+  flushing = true;
+  const batch = [...buffer];
+  buffer.length = 0;
   try {
-    const queue = readQueue();
-    queue.push(...buffer);
-    buffer.length = 0;
-    writeQueue(queue);
+    await fetch("/api/analytics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events: batch }),
+    });
   } catch {
-    // 静默
+    // 失败时把事件放回 buffer，下次 flush 重试
+    buffer.unshift(...batch);
+  } finally {
+    flushing = false;
   }
 }
 
-// 页面卸载前立即 flush（避免丢事件）
+/** 页面卸载前用 sendBeacon 立即 flush */
+function flushOnUnload(): void {
+  if (typeof window === "undefined") return;
+  if (buffer.length === 0) return;
+  const batch = [...buffer];
+  buffer.length = 0;
+  const blob = new Blob([JSON.stringify({ events: batch })], {
+    type: "application/json",
+  });
+  navigator.sendBeacon("/api/analytics", blob);
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
@@ -152,33 +128,10 @@ if (typeof window !== "undefined") {
         clearTimeout(flushTimer);
         flushTimer = undefined;
       }
-      flushToStorage();
+      flushOnUnload();
     }
   });
-  window.addEventListener("beforeunload", flushToStorage);
-}
-
-/**
- * 记录事件。永不抛错，绝不阻塞主流程。
- * P6-T9: 推入 in-memory buffer，500ms 后批量 flush 到 localStorage
- */
-export function trackEvent(
-  name: AnalyticsEventName,
-  props: Record<string, unknown> = {}
-): void {
-  if (typeof window === "undefined") return;
-  try {
-    const event: AnalyticsEvent = {
-      name,
-      ts: new Date().toISOString(),
-      sid: getSessionId(),
-      props: sanitizeProps(props),
-    };
-    buffer.push(event);
-    scheduleFlush();
-  } catch {
-    // 静默
-  }
+  window.addEventListener("beforeunload", flushOnUnload);
 }
 
 function sanitizeProps(props: Record<string, unknown>): Record<string, unknown> {
@@ -201,29 +154,60 @@ function sanitizeProps(props: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
- * 读取已积累的事件（调试/未来上报用）。
- * P6-T9: 合并 in-memory buffer + localStorage 保证读一致
+ * 记录事件。永不抛错，绝不阻塞主流程。
+ * 推入 in-memory buffer，500ms 后批量 POST 到 /api/analytics
  */
-export function drainEvents(): AnalyticsEvent[] {
+export function trackEvent(
+  name: AnalyticsEventName,
+  props: Record<string, unknown> = {}
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const event: AnalyticsEvent = {
+      name,
+      ts: new Date().toISOString(),
+      sid: getSessionId(),
+      props: sanitizeProps(props),
+    };
+    buffer.push(event);
+    scheduleFlush();
+  } catch {
+    // 静默
+  }
+}
+
+/**
+ * 读取已积累的事件（从 SQLite 读取，合并内存 buffer）
+ */
+export async function peekEvents(): Promise<AnalyticsEvent[]> {
+  if (typeof window === "undefined") return [];
+  try {
+    const res = await fetch("/api/analytics");
+    if (!res.ok) return buffer.length > 0 ? [...buffer] : [];
+    const stored = (await res.json()) as AnalyticsEvent[];
+    return buffer.length > 0 ? [...stored, ...buffer] : stored;
+  } catch {
+    return buffer.length > 0 ? [...buffer] : [];
+  }
+}
+
+/**
+ * 读取并清空全部事件
+ */
+export async function drainEvents(): Promise<AnalyticsEvent[]> {
   if (typeof window === "undefined") return [];
   // 先 flush 待写事件
   if (flushTimer) {
     clearTimeout(flushTimer);
     flushTimer = undefined;
   }
-  flushToStorage();
-  const events = readQueue();
+  await flushToServer();
   try {
-    localStorage.removeItem(QUEUE_KEY);
+    const res = await fetch("/api/analytics");
+    const events = res.ok ? ((await res.json()) as AnalyticsEvent[]) : [];
+    await fetch("/api/analytics", { method: "DELETE" });
+    return events;
   } catch {
-    // ignore
+    return [];
   }
-  return events;
-}
-
-export function peekEvents(): AnalyticsEvent[] {
-  if (typeof window === "undefined") return [];
-  // 合并 buffer 与 localStorage（buffer 中是尚未 flush 的事件）
-  const stored = readQueue();
-  return buffer.length > 0 ? [...stored, ...buffer] : stored;
 }
