@@ -13,6 +13,13 @@ import {
   upsertMaterial,
 } from "@/lib/material";
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
+import type { ExampleWork } from "@/lib/example";
+import {
+  createExample,
+  enrichExampleWithAnalysis,
+  getExample,
+  upsertExample,
+} from "@/lib/example";
 
 /**
  * 拆解进度展示页
@@ -29,6 +36,7 @@ interface PendingInput {
   text: string;
   paragraphs: string[];
   fileName?: string;
+  exampleId?: string;
 }
 
 const STAGES = [
@@ -45,8 +53,14 @@ export default function AnalyzingPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [retryInfo, setRetryInfo] = useState<{
+    current: number;
+    max: number;
+  } | null>(null);
+  const [exampleSaveFailed, setExampleSaveFailed] = useState(false);
   const cleanupRef = useRef<(() => void) | null>(null);
   const pendingRef = useRef<PendingInput | null>(null);
+  const pendingExampleSaveRef = useRef<ExampleWork | null>(null);
 
   const runAnalysis = () => {
     const pendingRaw = sessionStorage.getItem("inksight:pending");
@@ -69,104 +83,175 @@ export default function AnalyzingPage() {
     setError(null);
     setDone(false);
     setRetrying(false);
+    setRetryInfo(null);
+    setExampleSaveFailed(false);
+    pendingExampleSaveRef.current = null;
 
     if (cleanupRef.current) {
       cleanupRef.current();
       cleanupRef.current = null;
     }
 
+    const MAX_RETRIES = 3;
     let cancelled = false;
-
-    const timer = setInterval(() => {
-      setProgress((p) => {
-        const next = Math.min(p + 1, TARGET_BEFORE_DONE);
-        const idx = next >= 50 ? 1 : 0;
-        setStageIdx(idx);
-        return next;
-      });
-    }, 2500);
-
-    const controller = new AbortController();
+    let retriesLeft = MAX_RETRIES;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let controller: AbortController | undefined;
     let navTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    fetch("/api/teardown", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: pending.text,
-        ...(pending.fileName ? { fileName: pending.fileName } : {}),
-      }),
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(
-            data.error || data.detail || `HTTP ${res.status}`
-          );
-        }
-        if (cancelled) return;
-        clearInterval(timer);
-        setProgress(100);
-        setStageIdx(1);
-        setDone(true);
-
-        const result = data as AnalysisResult;
-        trackEvent("analysis_completed", {
-          processing_time: result.meta?.totalMs ?? 0,
-          degraded: result.meta?.degraded ?? false,
-          plot_status: result.plot?.status ?? "error",
-          character_status: result.character?.status ?? "error",
+    const attemptFetch = () => {
+      controller = new AbortController();
+      timer = setInterval(() => {
+        setProgress((p) => {
+          const next = Math.min(p + 1, TARGET_BEFORE_DONE);
+          const idx = next >= 50 ? 1 : 0;
+          setStageIdx(idx);
+          return next;
         });
+      }, 2500);
 
-        const historyTitle = pending.fileName && pending.fileName.trim() !== "粘贴文本"
-          ? pending.fileName.trim().replace(/\.[^.]+$/, "")
-          : pending.text.slice(0, 20).trim() || "未命名作品";
-        const plotType = result.plot.data?.editorView.basicInfo.type ?? "未知";
-        const reportId = `${plotType}-${Date.now()}`;
-        saveAnalysis(result, pending.paragraphs, reportId);
-        appendTeardownHistory(
-          buildHistoryEntry(result, historyTitle, reportId)
-        );
-
-        // 拆文素材自动入库：提取 6 张素材卡 + 人设卡 + 关系卡，持久化到 localStorage
-        // source = "teardown" 会被「全部素材」和「拆文汇总」同时命中
-        try {
-          const candidates = buildAnalysisMaterialCandidates(result, reportId);
-          let persistedCount = 0;
-          for (const c of candidates) {
-            if (upsertMaterial(c.material)) persistedCount++;
-          }
-          trackEvent("material_auto_extracted", {
-            report_id: reportId,
-            extract_count: candidates.length,
-            persisted_count: persistedCount,
-            source: "teardown",
-          });
-        } catch (e) {
-          // 素材入库失败不影响主流程，静默降级
-          trackEvent("material_extract_failed", {
-            report_id: reportId,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-        sessionStorage.removeItem("inksight:pending");
-
-        navTimer = setTimeout(() => router.replace("/report"), 600);
+      fetch("/api/teardown", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: pending.text,
+          ...(pending.fileName ? { fileName: pending.fileName } : {}),
+        }),
+        signal: controller.signal,
       })
-      .catch((e) => {
-        if (controller.signal.aborted || cancelled) return;
-        clearInterval(timer);
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(msg);
-        trackEvent("analysis_failed", { error: msg });
-      });
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(
+              data.error || data.detail || `HTTP ${res.status}`
+            );
+          }
+          if (cancelled) return;
+          clearInterval(timer);
+          setProgress(100);
+          setStageIdx(1);
+          setRetryInfo(null);
+
+          const result = data as AnalysisResult;
+          trackEvent("analysis_completed", {
+            processing_time: result.meta?.totalMs ?? 0,
+            degraded: result.meta?.degraded ?? false,
+            plot_status: result.plot?.status ?? "error",
+            character_status: result.character?.status ?? "error",
+          });
+
+          const historyTitle =
+            pending.fileName && pending.fileName.trim() !== "粘贴文本"
+              ? pending.fileName.trim().replace(/\.[^.]+$/, "")
+              : pending.text.slice(0, 20).trim() || "未命名作品";
+          const plotType = result.plot.data?.editorView.basicInfo.type ?? "未知";
+          const reportId = `${plotType}-${Date.now()}`;
+          saveAnalysis(result, pending.paragraphs, reportId);
+          await appendTeardownHistory(
+            buildHistoryEntry(result, historyTitle, reportId)
+          );
+
+          let exampleToSave: ExampleWork | null = null;
+          try {
+            const existing = pending.exampleId
+              ? await getExample(pending.exampleId)
+              : null;
+            const example =
+              existing ??
+              createExample({
+                id: pending.exampleId,
+                title: historyTitle,
+                text: pending.text,
+              });
+            exampleToSave = enrichExampleWithAnalysis(example, result, reportId);
+            const saved = await upsertExample(exampleToSave);
+            if (!saved) throw new Error("例文报告保存失败");
+          } catch (caught) {
+            trackEvent("example_save_failed", {
+              report_id: reportId,
+              error: caught instanceof Error ? caught.message : String(caught),
+            });
+            if (exampleToSave) {
+              pendingExampleSaveRef.current = exampleToSave;
+              setExampleSaveFailed(true);
+              setError("拆文已完成，但例文报告保存失败");
+              return;
+            }
+          }
+
+          // 拆文素材自动入库：提取 6 张素材卡 + 人设卡 + 关系卡，持久化到 SQLite
+          // source = "teardown" 会被「全部素材」和「拆文汇总」同时命中
+          try {
+            const candidates = buildAnalysisMaterialCandidates(result, reportId);
+            const results = await Promise.all(
+              candidates.map((c) => upsertMaterial(c.material))
+            );
+            const persistedCount = results.filter(Boolean).length;
+            trackEvent("material_auto_extracted", {
+              report_id: reportId,
+              extract_count: candidates.length,
+              persisted_count: persistedCount,
+              source: "teardown",
+            });
+          } catch (e) {
+            // 素材入库失败不影响主流程，静默降级
+            trackEvent("material_extract_failed", {
+              report_id: reportId,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+          setDone(true);
+          sessionStorage.removeItem("inksight:pending");
+
+          navTimer = setTimeout(() => router.replace("/report"), 600);
+        })
+        .catch((e) => {
+          if (controller?.signal.aborted || cancelled) return;
+          if (timer) clearInterval(timer);
+          const msg = e instanceof Error ? e.message : String(e);
+
+          // 可重试的错误：超时、网络异常
+          const isRetryable =
+            msg.includes("超时") ||
+            msg.includes("timeout") ||
+            msg.includes("网络") ||
+            msg.includes("network") ||
+            msg.includes("fetch") ||
+            msg.includes("Failed to");
+
+          if (isRetryable && retriesLeft > 0) {
+            retriesLeft--;
+            const attempt = MAX_RETRIES - retriesLeft;
+            setRetryInfo({ current: attempt, max: MAX_RETRIES });
+            setProgress(0);
+            setStageIdx(0);
+            trackEvent("analysis_auto_retry", {
+              retry_attempt: attempt,
+              error: msg,
+            });
+            retryTimer = setTimeout(() => {
+              if (!cancelled) attemptFetch();
+            }, 1500);
+          } else {
+            setError(msg);
+            setRetryInfo(null);
+            trackEvent("analysis_failed", {
+              error: msg,
+              retries_used: MAX_RETRIES - retriesLeft,
+            });
+          }
+        });
+    };
+
+    attemptFetch();
 
     cleanupRef.current = () => {
       cancelled = true;
-      clearInterval(timer);
-      controller.abort();
+      if (timer) clearInterval(timer);
+      controller?.abort();
       if (navTimer) clearTimeout(navTimer);
+      if (retryTimer) clearTimeout(retryTimer);
     };
   };
 
@@ -174,6 +259,23 @@ export default function AnalyzingPage() {
     setRetrying(true);
     trackEvent("analysis_retry", {});
     runAnalysis();
+  };
+
+  const retryExampleSave = async () => {
+    const example = pendingExampleSaveRef.current;
+    if (!example) return;
+    setRetrying(true);
+    const saved = await upsertExample(example);
+    setRetrying(false);
+    if (!saved) {
+      setError("拆文已完成，但例文报告保存失败");
+      return;
+    }
+    setExampleSaveFailed(false);
+    setError(null);
+    setDone(true);
+    sessionStorage.removeItem("inksight:pending");
+    window.setTimeout(() => router.replace("/report"), 300);
   };
 
   useEffect(() => {
@@ -199,6 +301,13 @@ export default function AnalyzingPage() {
               约 2-5 分钟，提示词复杂请耐心等候
             </p>
           </div>
+
+          {/* 自动重试提示 */}
+          {retryInfo && !error && (
+            <div className="mb-4 rounded-md border border-accent/30 bg-accent/[0.06] px-4 py-2 text-center text-xs text-accent">
+              上次尝试超时，正在自动重试（第 {retryInfo.current}/{retryInfo.max} 次）…
+            </div>
+          )}
 
           {/* 进度条 */}
           <div className="mb-6">
@@ -268,35 +377,29 @@ export default function AnalyzingPage() {
           {error && (
             <div className="mt-6 rounded-md border-l-4 border-primary bg-primary/5 p-4">
               <div className="font-display text-sm font-semibold text-primary">
-                拆解未能完成
+                {exampleSaveFailed ? "拆文完成，报告暂未入库" : "拆解未能完成"}
               </div>
               <p className="mt-1 text-xs leading-relaxed text-text">
-                {error.includes("超时") || error.includes("timeout")
-                  ? "分析超时了，可能是文本较长或服务繁忙，请稍后重试。"
+                {exampleSaveFailed
+                  ? "分析结果已经保留，不会重新调用 AI。请重试保存，成功后即可查看报告。"
+                  : error.includes("超时") || error.includes("timeout")
+                  ? `已自动重试 3 次仍超时，可能是文本较长或服务繁忙，请稍后手动重试。`
                   : error.includes("未配置") || error.includes("API_KEY")
                   ? "AI 分析服务暂时不可用，可先用演示数据体验完整功能。"
-                  : "网络或服务出现异常，请稍后重试。"}
+                  : "已自动重试 3 次仍失败，网络或服务出现异常，请稍后手动重试。"}
               </p>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={handleRetry}
+                  onClick={exampleSaveFailed ? () => void retryExampleSave() : handleRetry}
                   disabled={retrying}
                   className="rounded-full border border-primary bg-primary px-4 py-1.5 text-xs text-text-inverse transition-colors hover:opacity-90 disabled:opacity-50"
                 >
-                  {retrying ? "重新拆解中…" : "重新拆解"}
+                  {exampleSaveFailed
+                    ? retrying ? "保存中…" : "重试保存并查看报告"
+                    : retrying ? "重新拆解中…" : "重新拆解"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sessionStorage.removeItem("inksight:pending");
-                    router.replace("/upload");
-                  }}
-                  className="rounded-md border border-border bg-bg px-4 py-1.5 text-xs text-text transition-colors hover:border-accent"
-                >
-                  返回上传
-                </button>
-                <button
+                {!exampleSaveFailed && <button
                   type="button"
                   onClick={() => {
                     sessionStorage.removeItem("inksight:pending");
@@ -305,7 +408,7 @@ export default function AnalyzingPage() {
                   className="rounded-md border border-border bg-bg px-4 py-1.5 text-xs text-text transition-colors hover:border-accent"
                 >
                   用演示数据查看报告
-                </button>
+                </button>}
               </div>
             </div>
           )}

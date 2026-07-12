@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { splitParagraphs } from "@/lib/report/session";
 import { parseFile, SUPPORTED_FORMAT_HINT } from "@/lib/report/file-parser";
 import { trackEvent } from "@/lib/report/analytics";
+import {
+  createExample,
+  stripFileExtension,
+  upsertExample,
+} from "@/lib/example";
 
 const MIN_CHARS = 100;
 const MAX_CHARS = 50_000;
@@ -97,7 +102,7 @@ export default function UploadPage() {
     setParseError(null);
   };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     setError(null);
 
     if (charCount < MIN_CHARS) {
@@ -118,9 +123,19 @@ export default function UploadPage() {
       format: fileFormat,
     });
     try {
+      const example = createExample({
+        title:
+          fileName && fileName !== "粘贴文本"
+            ? stripFileExtension(fileName)
+            : text.trim().slice(0, 20) || "未命名例文",
+        text,
+      });
+      if (!(await upsertExample(example))) {
+        throw new Error("例文保存失败，请稍后重试");
+      }
       sessionStorage.setItem(
         "inksight:pending",
-        JSON.stringify({ text, paragraphs, fileName })
+        JSON.stringify({ text, paragraphs, fileName, exampleId: example.id })
       );
       router.push("/analyzing");
     } catch (e) {
@@ -267,7 +282,7 @@ export default function UploadPage() {
           <button
             type="button"
             disabled={submitting || parsing || charCount < MIN_CHARS}
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             className="rounded-full border border-primary bg-primary px-8 py-2.5 font-serif text-inverse transition-all hover:bg-primary/90 hover:shadow-lg disabled:cursor-not-allowed disabled:border-text-muted disabled:bg-text-muted disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 shadow-md"
           >
             {submitting ? "提交中…" : "开始拆解 →"}

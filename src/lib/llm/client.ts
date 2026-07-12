@@ -56,6 +56,8 @@ export interface LLMCallResult {
   content: string;
   /** 解析后的 JSON（若 jsonMode 为 true） */
   parsed?: unknown;
+  /** 输出是否因 max_tokens 被截断 */
+  truncated?: boolean;
   usage: {
     promptTokens: number;
     completionTokens: number;
@@ -100,12 +102,24 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
 
   const durationMs = Date.now() - startTime;
   const content = response.choices[0]?.message?.content || "";
+  const truncated = response.choices[0]?.finish_reason === "length";
 
   let parsed: unknown;
   if (jsonMode) {
     try {
       parsed = JSON.parse(content);
     } catch {
+      if (truncated) {
+        // 输出被 max_tokens 截断，尝试自动闭合 JSON
+        const repaired = tryRepairTruncatedJson(content);
+        if (repaired) {
+          try {
+            parsed = JSON.parse(repaired);
+          } catch {
+            // 修复后仍无法解析，返回原始内容，由调用方处理
+          }
+        }
+      }
       // JSON 解析失败，返回原始内容，由调用方处理
     }
   }
@@ -113,6 +127,7 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
   return {
     content,
     parsed,
+    truncated,
     usage: {
       promptTokens: response.usage?.prompt_tokens || 0,
       completionTokens: response.usage?.completion_tokens || 0,
@@ -120,6 +135,65 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     },
     durationMs,
   };
+}
+
+/**
+ * 尝试修复被截断的 JSON 字符串
+ * 策略：补全未闭合的字符串、数组、对象
+ * @returns 修复后的字符串；无法修复时返回 null
+ */
+function tryRepairTruncatedJson(text: string): string | null {
+  let repaired = text.trim();
+  if (!repaired) return null;
+
+  // 如果以逗号结尾，去掉尾逗号
+  repaired = repaired.replace(/,\s*$/, "");
+
+  // 补全未闭合的字符串（如果最后引号数量为奇数）
+  const quoteCount = (repaired.match(/(?<!\\)"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    repaired += '"';
+  }
+
+  // 统计未闭合的括号
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const ch of repaired) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+    } else if (ch === "}") {
+      if (stack[stack.length - 1] === "{") stack.pop();
+    } else if (ch === "]") {
+      if (stack[stack.length - 1] === "[") stack.pop();
+    }
+  }
+
+  // 如果在字符串中被截断，先闭合字符串
+  if (inString) {
+    repaired += '"';
+  }
+
+  // 反向补全括号
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const open = stack[i];
+    repaired += open === "{" ? "}" : "]";
+  }
+
+  return repaired;
 }
 
 /**
@@ -172,7 +246,9 @@ export async function callLLMWithSchema<T>(
       lastRawContent = raw.content;
 
       if (!raw.parsed) {
-        lastError = `LLM 输出不是有效 JSON（第 ${attempt} 次），原始内容前 500 字: ${raw.content.slice(0, 500)}`;
+        lastError = raw.truncated
+          ? `LLM 输出因 max_tokens 被截断导致 JSON 不完整（第 ${attempt} 次），请精简输出或增大 maxTokens`
+          : `LLM 输出不是有效 JSON（第 ${attempt} 次），原始内容前 500 字: ${raw.content.slice(0, 500)}`;
         continue;
       }
 

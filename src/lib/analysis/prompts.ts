@@ -389,7 +389,7 @@ export const CHARACTER_ANALYSIS_PROMPT = {
 5. 人设拆解必须服务创作转化，所有结论都要回答"这个人物为什么能推动剧情、制造情绪、刺激付费、迁移成新故事"。
 6. 人物姓名前要标清叙事身份，例如"主人公崔诗怡""反派周南生""女配高小乔"。
 
-请按以下七部分流程提取，并输出为合法 JSON 对象。
+请按以下五部分流程提取，并输出为合法 JSON 对象。
 
 ## JSON 输出格式
 
@@ -489,36 +489,7 @@ export const CHARACTER_ANALYSIS_PROMPT = {
       "transferableRelationships": ["适合迁移到哪些新关系"],
       "nonReplicableParts": ["不能照搬的地方"]
     }
-  ],
-  "entryTable": [
-    {
-      "characterModelName": "人设模型名（抽象，可被后续检索）",
-      "correspondingCharacter": "对应原文人物",
-      "narrativeRole": "叙事身份",
-      "coreDesire": "核心欲望",
-      "coreFear": "核心恐惧",
-      "biggestWeakness": "最大软肋",
-      "actionPattern": "行动模式",
-      "relationshipImbalance": "关系失衡",
-      "emotionFunction": "情绪功能",
-      "satisfactionFunction": "爽虐功能",
-      "characterArc": "人物弧光",
-      "transferableIdentities": ["可迁移身份"],
-      "transferableRelationships": ["可迁移关系"],
-      "suitableGenres": ["适合题材"],
-      "nonReplicableZones": ["不可复刻雷区"]
-    }
-  ],
-  "selfCheck": {
-    "q1": "是否已经区分核心人物、关键配角、功能人物？",
-    "q2": "每个核心人物是否同时完成了机制表、小传和人设卡？",
-    "q3": "人物机制是否能解释剧情为什么推进？",
-    "q4": "主人公的痛点、底线、反击能力是否清楚？",
-    "q5": "反派或冲突方的加害逻辑、误判和败因是否清楚？",
-    "q6": "人物关系是否已经抽象成可迁移模型？",
-    "q7": "是否标出了不可复刻细节？",
-    "q8": "拆出来的人设换身份、换关系、换题材后还能不能成立？"
-  }
+  ]
 }
 
 ## 重要规则

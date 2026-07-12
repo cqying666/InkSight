@@ -115,6 +115,7 @@ async function runCharacterAnalysis(
     jsonMode: true,
     maxAttempts: 2,
     timeout: timeoutMs,
+    maxTokens: 16384,
     validate: (parsed) => validateCharacterAnalysis(parsed),
   });
 

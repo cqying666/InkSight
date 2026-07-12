@@ -453,38 +453,6 @@ export const CharacterAnalysisSchema = z.object({
     })
   ),
 
-  // 第六部分：入库总表
-  entryTable: z.array(
-    z.object({
-      characterModelName: str,
-      correspondingCharacter: str,
-      narrativeRole: str,
-      coreDesire: str,
-      coreFear: str,
-      biggestWeakness: str,
-      actionPattern: str,
-      relationshipImbalance: str,
-      emotionFunction: str,
-      satisfactionFunction: str,
-      characterArc: str,
-      transferableIdentities: strArr,
-      transferableRelationships: strArr,
-      suitableGenres: strArr,
-      nonReplicableZones: strArr,
-    })
-  ),
-
-  // 第七部分：质量自检
-  selfCheck: z.object({
-    q1: str,
-    q2: str,
-    q3: str,
-    q4: str,
-    q5: str,
-    q6: str,
-    q7: str,
-    q8: str,
-  }),
 });
 
 // ===== 类型导出 =====
@@ -539,8 +507,6 @@ export function validateCharacterAnalysis(data: unknown): {
       biographies: [],
       reusableCards: [],
       relationships: [],
-      entryTable: [],
-      selfCheck: { q1: "", q2: "", q3: "", q4: "", q5: "", q6: "", q7: "", q8: "" },
     };
     for (const key of Object.keys(defaults)) {
       if (obj[key] == null) obj[key] = defaults[key];
