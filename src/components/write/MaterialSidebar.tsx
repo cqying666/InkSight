@@ -65,12 +65,18 @@ export function MaterialSidebar({ outline }: Props) {
   const [userRev, setUserRev] = useState(0);
 
   useEffect(() => {
-    try {
-      setMaterials(loadAllMaterials());
-    } catch {
-      setError(true);
-    }
-    setLoaded(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await loadAllMaterials();
+        if (cancelled) return;
+        setMaterials(loaded);
+      } catch {
+        if (!cancelled) setError(true);
+      }
+      if (!cancelled) setLoaded(true);
+    })();
+    return () => { cancelled = true; };
   }, [userRev]);
 
   // 索引在 materials 变化时重建
@@ -262,8 +268,8 @@ function RecommendTab({
   );
 
   const handleToggleFav = useCallback(
-    (m: Material) => {
-      upsertMaterial({ ...m, favorited: !m.favorited });
+    async (m: Material) => {
+      await upsertMaterial({ ...m, favorited: !m.favorited });
       onRefresh();
     },
     [onRefresh]
@@ -455,14 +461,14 @@ function CollectTab({
 
   // 创建原子素材
   const createAtom = useCallback(
-    (text: string, tagList: string[]) => {
+    async (text: string, tagList: string[]) => {
       if (!text.trim()) return;
 
       const now = new Date().toISOString();
       const id = `manual-atom-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 6)}`;
-      upsertMaterial({
+      await upsertMaterial({
         id,
         layer: "atom",
         source: "manual",
@@ -501,7 +507,7 @@ function CollectTab({
       .split(/[,，\s]+/)
       .map((t) => t.trim())
       .filter(Boolean);
-    createAtom(text, tagList);
+    void createAtom(text, tagList);
     setTags("");
   }, [getSelectionText, tags, createAtom]);
 
@@ -512,7 +518,7 @@ function CollectTab({
       .split(/[,，\s]+/)
       .map((t) => t.trim())
       .filter(Boolean);
-    createAtom(manualText, tagList);
+    void createAtom(manualText, tagList);
     setManualText("");
     setTags("");
   }, [manualText, tags, createAtom]);
@@ -529,7 +535,7 @@ function CollectTab({
           .split(/[,，\s]+/)
           .map((t) => t.trim())
           .filter(Boolean);
-        createAtom(text, tagList);
+        void createAtom(text, tagList);
         setTags("");
       }
     },

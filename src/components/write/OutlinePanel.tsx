@@ -13,16 +13,14 @@ import {
   createEmptyOutline,
   loadOutline,
   saveOutline,
-  outlineFromTeardown,
+  clearOutline,
 } from "@/lib/write/outline";
-import { loadFeedback } from "@/lib/report/session";
 import { trackEvent } from "@/lib/report/analytics";
 
 /**
  * P5-T4 结构大纲面板
  *
  * 用户在创作前搭建大纲：钩子/三幕/反转/结局/情绪目标
- * 来源：自定义 / 从拆文结果生成模板（学→创衔接）
  */
 
 interface Props {
@@ -32,26 +30,19 @@ interface Props {
 export function OutlinePanel({ onOutlineChange }: Props) {
   const [outline, setOutline] = useState<WriteOutline | null>(null);
   const [expanded, setExpanded] = useState(true);
-  const [hasTeardown, setHasTeardown] = useState(false);
-  // P5-T13 降级：拆文数据损坏时提示手动操作
-  const [teardownError, setTeardownError] = useState(false);
 
-  // 初始化：加载已有大纲或检查拆文结果
+  // 初始化：加载已有大纲
   useEffect(() => {
-    const existing = loadOutline();
-    if (existing) {
-      setOutline(existing);
-      onOutlineChange?.(existing);
-    }
-    // 检查是否有拆文结果可用于生成模板
-    try {
-      const stored = loadFeedback();
-      if (stored && stored.analysis.plot.status === "loaded" && stored.analysis.plot.data) {
-        setHasTeardown(true);
+    let cancelled = false;
+    (async () => {
+      const existing = await loadOutline();
+      if (cancelled) return;
+      if (existing) {
+        setOutline(existing);
+        onOutlineChange?.(existing);
       }
-    } catch {
-      setTeardownError(true);
-    }
+    })();
+    return () => { cancelled = true; };
   }, [onOutlineChange]);
 
   const updateOutline = useCallback(
@@ -59,7 +50,7 @@ export function OutlinePanel({ onOutlineChange }: Props) {
       const base = outline || createEmptyOutline();
       const next = { ...updater(base), updatedAt: Date.now() };
       setOutline(next);
-      saveOutline(next);
+      void saveOutline(next);
       onOutlineChange?.(next);
     },
     [outline, onOutlineChange]
@@ -68,35 +59,15 @@ export function OutlinePanel({ onOutlineChange }: Props) {
   const handleCreate = useCallback(() => {
     const next = createEmptyOutline();
     setOutline(next);
-    saveOutline(next);
+    void saveOutline(next);
     onOutlineChange?.(next);
     trackEvent("write_outline_created", { source: "blank" });
-  }, [onOutlineChange]);
-
-  const handleFromTeardown = useCallback(() => {
-    try {
-      const stored = loadFeedback();
-      if (!stored || stored.analysis.plot.status !== "loaded" || !stored.analysis.plot.data) {
-        setTeardownError(true);
-        return;
-      }
-      const next = outlineFromTeardown(stored.analysis.plot.data);
-      setOutline(next);
-      saveOutline(next);
-      onOutlineChange?.(next);
-      trackEvent("write_outline_created", { source: "teardown" });
-    } catch {
-      // P5-T13 降级：拆文数据异常时提示手动搭建
-      setTeardownError(true);
-    }
   }, [onOutlineChange]);
 
   const handleDelete = useCallback(() => {
     setOutline(null);
     onOutlineChange?.(null);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("inksight:write:outline");
-    }
+    void clearOutline();
   }, [onOutlineChange]);
 
   // ===== 未创建大纲时：选择入口 =====
@@ -117,22 +88,7 @@ export function OutlinePanel({ onOutlineChange }: Props) {
           >
             创建空白大纲
           </button>
-          {hasTeardown && (
-            <button
-              type="button"
-              onClick={handleFromTeardown}
-              className="rounded-sm border border-accent bg-bg px-4 py-1.5 font-serif text-xs text-accent transition-colors hover:bg-accent/[0.05]"
-            >
-              从拆文结果生成
-            </button>
-          )}
         </div>
-        {/* P5-T13 降级：拆文数据异常时提示手动搭建 */}
-        {teardownError && (
-          <p className="mt-2 text-[10px] text-primary">
-            拆文数据读取异常，无法自动生成模板，请手动创建空白大纲搭建结构
-          </p>
-        )}
       </div>
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, type ChangeEvent } from "react";
 
 interface Props {
   title: string;
@@ -18,15 +18,29 @@ export function WorkspaceDocumentEditor({
   onChange,
 }: Props) {
   const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // 自适应内容高度：内容变化时重新计算 textarea 高度，由外层容器统一滚动
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [value]);
+
+  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const saved = onChange(e.target.value);
+    setSaveState(saved ? "saved" : "error");
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-text/[0.06] px-6">
+      <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-text/[0.06] px-5">
         <div>
           <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-text-muted/60">
             {eyebrow}
           </span>
-          <h2 className="font-serif text-base font-semibold text-text">{title}</h2>
+          <h2 className="font-serif text-[15px] font-semibold text-text">{title}</h2>
         </div>
         <span className="font-mono text-[10px] text-text-muted">
           {saveState === "error"
@@ -37,15 +51,13 @@ export function WorkspaceDocumentEditor({
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto h-full max-w-[760px] px-8 py-8">
+        <div className="px-6 py-6">
           <textarea
+            ref={taRef}
             value={value}
-            onChange={(event) => {
-              const saved = onChange(event.target.value);
-              setSaveState(saved ? "saved" : "error");
-            }}
+            onChange={handleChange}
             placeholder={placeholder}
-            className="min-h-[65vh] w-full resize-none rounded-xl border border-text/[0.06] bg-surface px-6 py-5 font-serif text-[16px] leading-[1.9] text-text shadow-card outline-none placeholder:text-text-muted/45 focus:border-accent/35 focus:ring-2 focus:ring-accent/10"
+            className="w-full resize-none bg-transparent font-serif text-[17px] leading-[1.9] text-text outline-none placeholder:text-text-muted/40"
           />
         </div>
       </div>
