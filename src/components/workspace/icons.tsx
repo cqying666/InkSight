@@ -239,3 +239,24 @@ export function HomeIcon({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function WorksIcon({ className = base }: IconProps) {
+  // 我的作品：叠放的书页
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 3h10a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M9 3v18" />
+      <path d="M8 7h6M8 10h6M8 13h6" />
+      <path d="M19 6v14a1 1 0 0 1-1 1H7" />
+    </svg>
+  );
+}

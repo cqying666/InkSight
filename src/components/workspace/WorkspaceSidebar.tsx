@@ -9,6 +9,7 @@ import {
   TrendIcon,
   MaterialIcon,
   WriteIcon,
+  WorksIcon,
   CollapseIcon,
   ExpandIcon,
   DrawerIcon,
@@ -46,7 +47,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "创作",
-    items: [{ href: "/write", label: "创作工作台", Icon: WriteIcon }],
+    items: [
+      { href: "/write", label: "新建作品", Icon: WriteIcon },
+      { href: "/works", label: "我的作品", Icon: WorksIcon },
+    ],
   },
 ];
 
