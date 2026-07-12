@@ -170,7 +170,7 @@ export function computeDashboardData(
   const activeSids = uniqueSids(filtered);
   const activeSessionCount = activeSids.size;
 
-  // 空数据快速返回
+  // 空数据：返回结构完整但数值全 0 的指标，让 UI 正常展示
   if (totalEvents === 0) {
     return {
       northStar: {
@@ -181,13 +181,61 @@ export function computeDashboardData(
         description: "月活创作者完成「拆文→创作」闭环的次数",
         achieved: false,
       },
-      modules: [],
-      loopFunnel: [],
+      modules: [
+        {
+          module: "学习模块",
+          metrics: [
+            { name: "first_teardown_rate", label: "首次拆文完成率", status: { value: 0, target: 85, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "avg_teardown_count", label: "人均拆文次数", status: { value: 0, target: 3, unit: "次", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "report_useful_score", label: "报告有用评分（均值）", status: { value: 0, target: 4.0, unit: "分", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "suggestion_adoption_rate", label: "建议采纳率", status: { value: 0, target: 30, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+          ],
+        },
+        {
+          module: "趋势模块",
+          metrics: [
+            { name: "trend_weekly_active_rate", label: "雷达周活跃率", status: { value: 0, target: 40, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "trend_element_save_rate", label: "趋势元素收藏率", status: { value: 0, target: 15, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "trend_useful_score", label: "趋势有用评分（均值）", status: { value: 0, target: 4.0, unit: "分", achieved: false, numerator: 0, denominator: 0 } },
+          ],
+        },
+        {
+          module: "素材模块",
+          metrics: [
+            { name: "material_weekly_active_rate", label: "素材库周活跃率", status: { value: 0, target: 30, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "material_adoption_rate", label: "素材采纳率", status: { value: 0, target: 20, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "material_useful_score", label: "素材有用评分（均值）", status: { value: 0, target: 4.0, unit: "分", achieved: false, numerator: 0, denominator: 0 } },
+          ],
+        },
+        {
+          module: "创作模块",
+          metrics: [
+            { name: "writing_weekly_active_rate", label: "创作工作台周活跃率", status: { value: 0, target: 50, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "avg_draft_count", label: "人均创作篇数", status: { value: 0, target: 1, unit: "次", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "post_analysis_trigger_rate", label: "写后分析触发率", status: { value: 0, target: 60, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "writing_useful_score", label: "工作台有用评分（均值）", status: { value: 0, target: 4.0, unit: "分", achieved: false, numerator: 0, denominator: 0 } },
+          ],
+        },
+        {
+          module: "闭环指标",
+          metrics: [
+            { name: "loop_completion_rate", label: "闭环完成率", status: { value: 0, target: 30, unit: "%", achieved: false, numerator: 0, denominator: 0 } },
+            { name: "loop_count_per_user", label: "闭环完成次数", status: { value: 0, target: 1, unit: "次", achieved: false, numerator: 0, denominator: 0 } },
+          ],
+        },
+      ],
+      loopFunnel: [
+        { stage: "上传小说", count: 0, rate: 100 },
+        { stage: "完成拆文", count: 0, rate: 0 },
+        { stage: "进入创作", count: 0, rate: 0 },
+        { stage: "完成作品", count: 0, rate: 0 },
+        { stage: "写后分析", count: 0, rate: 0 },
+      ],
       totalEvents: 0,
       activeSessions: 0,
       timeRangeDays,
       generatedAt: new Date().toISOString(),
-      isEmpty: true,
+      isEmpty: false,
     };
   }
 

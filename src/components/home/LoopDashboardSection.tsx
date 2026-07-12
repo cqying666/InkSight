@@ -12,7 +12,13 @@ export function LoopDashboardSection() {
   const [data, setData] = useState<DashboardData | null>(null);
 
   useEffect(() => {
-    setData(computeDashboardData(peekEvents(), timeRange));
+    let cancelled = false;
+    (async () => {
+      const events = await peekEvents();
+      if (cancelled) return;
+      setData(computeDashboardData(events, timeRange));
+    })();
+    return () => { cancelled = true; };
   }, [timeRange]);
 
   if (!data) {

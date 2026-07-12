@@ -21,6 +21,8 @@ import {
 import { trackEvent } from "@/lib/report/analytics";
 import { degradeMaterialSearch } from "@/lib/trend";
 import { CreateMaterialDialog } from "@/components/material/CreateMaterialDialog";
+import { UploadExampleDialog } from "@/components/material/UploadExampleDialog";
+import { listExamples, type ExampleSummary } from "@/lib/example";
 
 /**
  * P4-T13 + P4-T14 素材库前端
@@ -43,7 +45,7 @@ import { CreateMaterialDialog } from "@/components/material/CreateMaterialDialog
  */
 
 type MenuKey =
-  | "all"
+  | "examples"
   | "teardown_summary"
   | "character"
   | "plot"
@@ -53,7 +55,7 @@ type MenuKey =
 
 /** 左侧一级菜单（按用户指定顺序） */
 const MENU_ITEMS: { key: MenuKey; label: string }[] = [
-  { key: "all", label: "全部素材" },
+  { key: "examples", label: "例文" },
   { key: "teardown_summary", label: "拆文汇总" },
   { key: "character", label: "人设" },
   { key: "plot", label: "剧情" },
@@ -65,8 +67,8 @@ const MENU_ITEMS: { key: MenuKey; label: string }[] = [
 /** 按菜单过滤素材 */
 function filterByMenu(materials: Material[], menu: MenuKey): Material[] {
   switch (menu) {
-    case "all":
-      return materials;
+    case "examples":
+      return [];
     case "teardown_summary":
       return materials.filter((m) => m.source === "teardown");
     case "character":
@@ -90,21 +92,61 @@ function filterByMenu(materials: Material[], menu: MenuKey): Material[] {
 
 export default function MaterialPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [examples, setExamples] = useState<ExampleSummary[]>([]);
+  const [examplesError, setExamplesError] = useState(false);
   const [query, setQuery] = useState("");
-  const [activeMenu, setActiveMenu] = useState<MenuKey>("all");
+  const [activeMenu, setActiveMenu] = useState<MenuKey>("examples");
   const [folders, setFolders] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   // 触发重新加载用户素材的信号（编辑后递增）
   const [userRev, setUserRev] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+  const [showUploadExample, setShowUploadExample] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   // 初始化：加载预置 + 用户收藏 + 趋势页一键收藏
   useEffect(() => {
-    setMaterials(loadAllMaterials());
-    setFolders(listFolders());
-    setLoaded(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [materialsResult, examplesResult] = await Promise.allSettled([
+          loadAllMaterials(),
+          listExamples(),
+        ]);
+        if (cancelled) return;
+        if (materialsResult.status === "fulfilled") {
+          setMaterials(materialsResult.value);
+          setFolders(listFolders(materialsResult.value));
+        }
+        if (examplesResult.status === "fulfilled") {
+          setExamples(examplesResult.value);
+          setExamplesError(false);
+        } else {
+          setExamplesError(true);
+        }
+      } catch {
+        // ignore
+      }
+      if (!cancelled) setLoaded(true);
+    })();
+    return () => { cancelled = true; };
   }, [userRev]);
+
+  const exampleResults = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("zh-CN");
+    if (!normalized) return examples;
+    return examples.filter((example) =>
+      [
+        example.title,
+        example.genre,
+        ...example.tags,
+        ...example.introSentences,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("zh-CN")
+        .includes(normalized)
+    );
+  }, [examples, query]);
 
   // 执行菜单过滤 + 搜索（notice/mode 作为派生值返回，避免在 useMemo 中调用 setState）
   const { results: searchResults, notice: searchNotice, mode: searchMode } = useMemo(() => {
@@ -116,7 +158,7 @@ export default function MaterialPage() {
     let mode: "tfidf" | "keyword" | "empty" = "tfidf";
 
     // 有搜索词时走 TF-IDF + 降级（在当前菜单范围内搜索）
-    if (query.trim()) {
+    if (activeMenu !== "examples" && query.trim()) {
       const scopedIndex = buildIndex(scoped);
       const tfidfResults = search(scopedIndex, query, { topN: 50 });
       const degraded = degradeMaterialSearch(
@@ -136,14 +178,14 @@ export default function MaterialPage() {
 
   // 搜索空结果埋点（副作用移到 useEffect，避免在 useMemo 中调用）
   useEffect(() => {
-    if (query.trim() && searchMode === "empty") {
+    if (activeMenu !== "examples" && query.trim() && searchMode === "empty") {
       trackEvent("material_searched", {
         source: "search_empty",
         query,
         mode: "empty",
       });
     }
-  }, [query, searchMode]);
+  }, [activeMenu, query, searchMode]);
 
   // 触发用户素材重载
   const reloadUserMaterials = useCallback(() => {
@@ -151,10 +193,16 @@ export default function MaterialPage() {
   }, []);
 
   // 收藏切换
-  const handleToggleFavorite = useCallback((material: Material) => {
+  const handleToggleFavorite = useCallback(async (material: Material) => {
     // 必须先 upsert 进 user store（preset/extracted 默认不在 user store 中）
-    upsertMaterial({ ...material, favorited: !material.favorited });
-    setFolders(listFolders());
+    const updated = await upsertMaterial({ ...material, favorited: !material.favorited });
+    if (updated) {
+      setMaterials((prev) => {
+        const next = prev.map((m) => (m.id === updated.id ? updated : m));
+        setFolders(listFolders(next));
+        return next;
+      });
+    }
     if (!material.favorited) {
       trackEvent("material_saved", {
         source: material.source,
@@ -167,31 +215,46 @@ export default function MaterialPage() {
   }, [reloadUserMaterials]);
 
   // 标签编辑
-  const handleSetTags = useCallback((material: Material, tags: string[]) => {
-    upsertMaterial({ ...material, component: material.component ? { ...material.component, tags } : material.component, atom: material.atom ? { ...material.atom, tags } : material.atom, inspiration: material.inspiration ? { ...material.inspiration, tags } : material.inspiration });
-    // 直接调 storageSetTags 之前需要确保已 upsert
-    storageSetTags(material.id, tags);
+  const handleSetTags = useCallback(async (material: Material, tags: string[]) => {
+    const updated = await upsertMaterial({ ...material, component: material.component ? { ...material.component, tags } : material.component, atom: material.atom ? { ...material.atom, tags } : material.atom, inspiration: material.inspiration ? { ...material.inspiration, tags } : material.inspiration });
+    if (updated) {
+      await storageSetTags(material.id, tags);
+      setMaterials((prev) => {
+        const next = prev.map((m) => (m.id === updated.id ? updated : m));
+        setFolders(listFolders(next));
+        return next;
+      });
+    }
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
   // 笔记编辑
-  const handleSetNotes = useCallback((material: Material, notes: string) => {
-    upsertMaterial(material);
-    storageSetNotes(material.id, notes);
+  const handleSetNotes = useCallback(async (material: Material, notes: string) => {
+    const updated = await upsertMaterial(material);
+    if (updated) {
+      await storageSetNotes(material.id, notes);
+      setMaterials((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    }
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
   // 文件夹分配
-  const handleSetFolder = useCallback((material: Material, folder: string | undefined) => {
-    upsertMaterial(material);
-    storageSetFolder(material.id, folder);
-    setFolders(listFolders());
+  const handleSetFolder = useCallback(async (material: Material, folder: string | undefined) => {
+    const updated = await upsertMaterial({ ...material, folder });
+    if (updated) {
+      await storageSetFolder(material.id, folder);
+      setMaterials((prev) => {
+        const next = prev.map((m) => (m.id === updated.id ? { ...m, folder } : m));
+        setFolders(listFolders(next));
+        return next;
+      });
+    }
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
   const handleCreateMaterial = useCallback(
-    (material: Material, category: MaterialCategory) => {
-      const persisted = upsertMaterial(material);
+    async (material: Material, category: MaterialCategory) => {
+      const persisted = await upsertMaterial(material);
       if (!persisted) return false;
       setCreatedId(material.id);
       setActiveMenu(
@@ -236,13 +299,22 @@ export default function MaterialPage() {
               素材库
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="rounded-full bg-primary px-5 py-2.5 text-sm text-text-inverse shadow-card transition-transform hover:-translate-y-0.5"
-          >
-            ＋ 新建素材
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowUploadExample(true)}
+              className="rounded-full border border-primary px-5 py-2.5 text-sm text-primary transition-transform hover:-translate-y-0.5"
+            >
+              ＋ 上传例文
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-full bg-primary px-5 py-2.5 text-sm text-text-inverse shadow-card transition-transform hover:-translate-y-0.5"
+            >
+              ＋ 新建素材
+            </button>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
@@ -295,7 +367,7 @@ export default function MaterialPage() {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="输入情境描述或关键词，如「角色发现真相后崩溃的场景」…"
+                  placeholder={activeMenu === "examples" ? "搜索书名、导语、题材或标签…" : "输入情境描述或关键词，如「角色发现真相后崩溃的场景」…"}
                   className="w-full rounded-lg border border-text/[0.10] bg-surface px-4 py-2.5 pr-10 text-sm placeholder:text-text-muted/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10"
                 />
                 {query && (
@@ -309,7 +381,7 @@ export default function MaterialPage() {
                   </button>
                 )}
               </div>
-              {searchNotice && (
+              {activeMenu !== "examples" && searchNotice && (
                 <div
                   className={`mt-2 rounded-md px-3 py-1.5 text-xs ${
                     searchMode === "keyword"
@@ -323,7 +395,37 @@ export default function MaterialPage() {
             </section>
 
             <section className="space-y-4">
-              {searchResults.length === 0 ? (
+              {activeMenu === "examples" ? (
+                examplesError ? (
+                  <div className="rounded-2xl border border-primary/20 bg-surface p-8 text-center shadow-card">
+                    <p className="text-sm text-primary">例文库加载失败，请检查服务后重试。</p>
+                    <button
+                      type="button"
+                      onClick={reloadUserMaterials}
+                      className="mt-3 rounded-full border border-primary px-4 py-1.5 text-xs text-primary"
+                    >
+                      重新加载
+                    </button>
+                  </div>
+                ) : exampleResults.length === 0 ? (
+                  <div className="rounded-2xl border border-text/[0.05] bg-surface p-8 text-center shadow-card">
+                    <p className="text-sm text-text-muted">
+                      {query ? `未找到「${query}」的匹配例文` : "例文库还是空的，上传一篇作品开始积累。"}
+                    </p>
+                    {!query && (
+                      <button
+                        type="button"
+                        onClick={() => setShowUploadExample(true)}
+                        className="mt-3 text-xs text-accent underline underline-offset-2"
+                      >
+                        上传第一篇例文
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  exampleResults.map((example) => <ExampleCard key={example.id} example={example} />)
+                )
+              ) : searchResults.length === 0 ? (
                 <div className="rounded-2xl border border-text/[0.05] bg-surface p-8 text-center shadow-card">
                   <p className="text-sm text-text-muted">
                     {query
@@ -376,7 +478,70 @@ export default function MaterialPage() {
           onCreate={handleCreateMaterial}
         />
       )}
+      {showUploadExample && (
+        <UploadExampleDialog
+          onClose={() => setShowUploadExample(false)}
+          onSaved={(example) => {
+            const { text: _text, paragraphs: _paragraphs, analysis: _analysis, ...summary } = example;
+            setExamples((current) => [summary, ...current.filter((item) => item.id !== summary.id)]);
+            setActiveMenu("examples");
+            setQuery("");
+            setShowUploadExample(false);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+function ExampleCard({ example }: { example: ExampleSummary }) {
+  const href =
+    example.status === "analyzed"
+      ? `/report?exampleId=${encodeURIComponent(example.id)}&tab=original`
+      : `/example/${encodeURIComponent(example.id)}`;
+
+  return (
+    <Link
+      href={href}
+      className="group block rounded-2xl border border-text/[0.05] bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-accent/25 hover:shadow-float"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="rounded-full bg-accent/[0.07] px-2.5 py-1 text-accent">{example.genre || "待分类"}</span>
+            <span className={example.status === "analyzed" ? "text-primary" : "text-text-muted"}>
+              {example.status === "analyzed" ? "已拆文" : "仅原文"}
+            </span>
+          </div>
+          <h2 className="mt-3 font-serif text-xl font-semibold text-text group-hover:text-primary">《{example.title}》</h2>
+        </div>
+        <span className="text-xs text-accent">{example.status === "analyzed" ? "查看 X 光原文 →" : "查看原文 →"}</span>
+      </div>
+
+      <div className="mt-4 rounded-xl bg-bg/70 p-4">
+        <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-text-muted">导语前三句话</p>
+        {example.introSentences.length > 0 ? (
+          <ol className="space-y-1.5 font-serif text-sm leading-relaxed text-text/85">
+            {example.introSentences.map((sentence, index) => (
+              <li key={`${example.id}-${index}`} className="flex gap-2">
+                <span className="font-mono text-[10px] text-text-muted">{String(index + 1).padStart(2, "0")}</span>
+                <span>{sentence}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-text-muted">原文暂无可展示导语。</p>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {example.tags.length > 0 ? example.tags.map((tag) => (
+          <span key={tag} className="rounded-md border border-text/[0.08] bg-bg px-2 py-0.5 text-[11px] text-text-muted">#{tag}</span>
+        )) : (
+          <span className="text-[11px] text-text-muted">暂无标签</span>
+        )}
+      </div>
+    </Link>
   );
 }
 

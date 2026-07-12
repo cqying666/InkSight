@@ -10,7 +10,7 @@ import {
 interface Props {
   folders: string[];
   onClose: () => void;
-  onCreate: (material: Material, category: MaterialCategory) => boolean;
+  onCreate: (material: Material, category: MaterialCategory) => boolean | Promise<boolean>;
 }
 
 const CATEGORY_OPTIONS: Array<{ value: MaterialCategory; label: string; hint: string }> = [
@@ -27,8 +27,9 @@ export function CreateMaterialDialog({ folders, onClose, onCreate }: Props) {
   const [tags, setTags] = useState("");
   const [folder, setFolder] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     const normalizedContent = content.trim();
     const normalizedTitle = title.trim() || normalizedContent.slice(0, 32);
     if (!normalizedContent) {
@@ -45,8 +46,16 @@ export function CreateMaterialDialog({ folders, onClose, onCreate }: Props) {
         .filter(Boolean),
       folder: folder.trim() || undefined,
     });
-    if (!onCreate(material, category)) {
-      setError("素材没有成功保存，请检查浏览器存储空间后重试。");
+    setSubmitting(true);
+    try {
+      const ok = await onCreate(material, category);
+      if (!ok) {
+        setError("素材没有成功保存，请检查存储空间后重试。");
+        setSubmitting(false);
+      }
+    } catch {
+      setError("素材没有成功保存，请检查存储空间后重试。");
+      setSubmitting(false);
     }
   };
 
@@ -155,8 +164,8 @@ export function CreateMaterialDialog({ folders, onClose, onCreate }: Props) {
           <button type="button" onClick={onClose} className="rounded-full border border-text/[0.10] px-4 py-2 text-xs text-text-muted">
             取消
           </button>
-          <button type="button" onClick={submit} className="rounded-full bg-primary px-5 py-2 text-xs text-text-inverse">
-            保存素材
+          <button type="button" onClick={() => void submit()} disabled={submitting} className="rounded-full bg-primary px-5 py-2 text-xs text-text-inverse disabled:opacity-50">
+            {submitting ? "保存中…" : "保存素材"}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { peekEvents } from "@/lib/report/analytics";
 import { SceneCard } from "@/components/home/SceneCard";
 import { CoachInput } from "@/components/home/CoachInput";
 import { LoopDashboardSection } from "@/components/home/LoopDashboardSection";
+import { createExample, stripFileExtension, upsertExample } from "@/lib/example";
 
 /**
  * 工作台首页 · 正式版
@@ -51,23 +52,38 @@ export default function HomePage() {
 
   useEffect(() => {
     setMounted(true);
-    const events = peekEvents();
-    const data = computeHomeData(events, 14);
-    const profile = computeUserProfile(events);
-    const g = getCoachGreeting(profile, data.lastActivityAt);
-    setGreeting({ title: g.title, message: g.message });
+    let cancelled = false;
+    (async () => {
+      const events = await peekEvents();
+      if (cancelled) return;
+      const data = computeHomeData(events, 14);
+      const profile = computeUserProfile(events);
+      const g = getCoachGreeting(profile, data.lastActivityAt);
+      if (cancelled) return;
+      setGreeting({ title: g.title, message: g.message });
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  const handleSubmit = (text: string, files?: { name: string; text: string }[]) => {
+  const handleSubmit = async (text: string, files?: { name: string; text: string }[]) => {
     // 有上传文件时，走拆文流程
     if (files && files.length > 0) {
       try {
         const combined = files.map((f) => f.text).join("\n\n---\n\n");
+        const fullText = text.trim() ? `${text}\n\n${combined}` : combined;
+        const title =
+          files.length === 1
+            ? stripFileExtension(files[0].name)
+            : `${stripFileExtension(files[0].name)}等${files.length}篇`;
+        const example = createExample({ title, text: fullText });
+        const saved = await upsertExample(example);
         sessionStorage.setItem(
           "inksight:pending",
           JSON.stringify({
-            text: text.trim() ? `${text}\n\n${combined}` : combined,
+            text: fullText,
             paragraphs: combined.split(/\n\s*\n/).filter(Boolean),
+            fileName: title,
+            ...(saved ? { exampleId: example.id } : {}),
           })
         );
       } catch {

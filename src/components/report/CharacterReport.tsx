@@ -3,15 +3,13 @@
 import type { CharacterAnalysis } from "@/lib/analysis/schema";
 
 /**
- * 人设分析报告 — 7 部分渲染
+ * 人设分析报告 — 5 部分渲染
  *
  * 1. 人物清单与分级
  * 2. 人设机制表
  * 3. 人物小传
  * 4. 可复用人设卡
  * 5. 人物关系资产
- * 6. 入库总表
- * 7. 质量自检
  */
 
 // ===== 通用小组件（与 PlotReport 共享设计语言）=====
@@ -262,92 +260,6 @@ function Relationships({ data }: { data: CharacterAnalysis["relationships"] }) {
   );
 }
 
-// ===== 6. 入库总表 =====
-
-function EntryTable({ data }: { data: CharacterAnalysis["entryTable"] }) {
-  if (data.length === 0) return null;
-
-  return (
-    <Card>
-      <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">入库总表</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border bg-bg-soft text-text-muted">
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">人设模型名</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">对应人物</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">叙事角色</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">核心欲望</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">核心恐惧</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">最大弱点</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">行为模式</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-normal">人物弧光</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((e, i) => (
-              <tr key={i} className="border-b border-border last:border-0">
-                <td className="whitespace-nowrap px-2 py-2 font-semibold text-text">{e.characterModelName}</td>
-                <td className="whitespace-nowrap px-2 py-2 text-text-muted">{e.correspondingCharacter}</td>
-                <td className="whitespace-nowrap px-2 py-2 text-text-muted">{e.narrativeRole}</td>
-                <td className="px-2 py-2 text-text-muted">{e.coreDesire}</td>
-                <td className="px-2 py-2 text-text-muted">{e.coreFear}</td>
-                <td className="px-2 py-2 text-text-muted">{e.biggestWeakness}</td>
-                <td className="px-2 py-2 text-text-muted">{e.actionPattern}</td>
-                <td className="px-2 py-2 text-text-muted">{e.characterArc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 可迁移信息 */}
-      <div className="mt-4 space-y-3">
-        {data.map((e, i) => (
-          <div key={i} className="rounded border border-border bg-bg-soft p-3">
-            <div className="mb-2 text-xs font-semibold text-text">{e.characterModelName}</div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <ListBlock items={e.transferableIdentities} title="可迁移身份" />
-              <ListBlock items={e.transferableRelationships} title="可迁移关系" />
-              <ListBlock items={e.suitableGenres} title="适合题材" />
-              <ListBlock items={e.nonReplicableZones} title="不可复刻区" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-// ===== 7. 质量自检 =====
-
-function CharacterSelfCheck({ data }: { data: CharacterAnalysis["selfCheck"] }) {
-  const items: { label: string; value: string }[] = [
-    { label: "Q1 人物分级", value: data.q1 },
-    { label: "Q2 三层拆解", value: data.q2 },
-    { label: "Q3 机制解释剧情", value: data.q3 },
-    { label: "Q4 主人公拆清", value: data.q4 },
-    { label: "Q5 反派拆清", value: data.q5 },
-    { label: "Q6 关系抽象", value: data.q6 },
-    { label: "Q7 不可复刻标注", value: data.q7 },
-    { label: "Q8 换后成立", value: data.q8 },
-  ];
-
-  return (
-    <Card>
-      <div className="mb-3 text-xs uppercase tracking-[0.15em] text-text-muted">质量自检</div>
-      <div className="space-y-2">
-        {items.filter((it) => it.value).map((it, i) => (
-          <div key={i} className="flex gap-2 text-sm">
-            <span className="shrink-0 font-mono text-xs text-accent">{it.label}</span>
-            <span className="flex-1 leading-relaxed text-text">{it.value}</span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
 // ===== 主组件 =====
 
 interface Props {
@@ -380,16 +292,6 @@ export function CharacterReport({ data }: Props) {
       <section>
         <SectionHeader num="05" title="人物关系资产" />
         <Relationships data={data.relationships} />
-      </section>
-
-      <section>
-        <SectionHeader num="06" title="入库总表" />
-        <EntryTable data={data.entryTable} />
-      </section>
-
-      <section>
-        <SectionHeader num="07" title="质量自检" />
-        <CharacterSelfCheck data={data.selfCheck} />
       </section>
     </div>
   );

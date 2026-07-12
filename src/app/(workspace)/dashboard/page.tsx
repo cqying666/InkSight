@@ -21,9 +21,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    const events = peekEvents();
-    const dashboardData = computeDashboardData(events, timeRange);
-    setData(dashboardData);
+    let cancelled = false;
+    (async () => {
+      const events = await peekEvents();
+      if (cancelled) return;
+      const dashboardData = computeDashboardData(events, timeRange);
+      setData(dashboardData);
+    })();
+    return () => { cancelled = true; };
   }, [mounted, timeRange]);
 
   if (!mounted || !data) {

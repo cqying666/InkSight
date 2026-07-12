@@ -8,6 +8,7 @@ import { loadAnalysis, clearAnalysis } from "@/lib/report/session";
 import { trackEvent } from "@/lib/report/analytics";
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
 import { MaterialDepositPanel } from "@/components/report/MaterialDepositPanel";
+import { getExample } from "@/lib/example";
 
 const XrayReport = dynamic(
   () => import("@/components/report/XrayReport").then((m) => m.XrayReport),
@@ -31,48 +32,88 @@ const XrayReport = dynamic(
 
 type State =
   | { status: "loading" }
+  | { status: "missing" }
   | {
       status: "ready";
       analysis: AnalysisResult;
       paragraphs: string[];
       reportId: string;
       isMock: boolean;
+      initialTab: "plot" | "character" | "original";
     };
 
 export default function ReportPage() {
   const [state, setState] = useState<State>({ status: "loading" });
-  const [rating, setRating] = useState<number | null>(null);
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [exported, setExported] = useState(false);
   const [pdfExported, setPdfExported] = useState(false);
 
   useEffect(() => {
-    const stored = loadAnalysis();
-    if (stored) {
-      setState({
-        status: "ready",
-        analysis: stored.analysis,
-        paragraphs: stored.paragraphs,
-        reportId: stored.reportId,
-        isMock: false,
-      });
-      trackEvent("report_viewed", { is_mock: false });
-    } else {
-      setState({
-        status: "ready",
-        analysis: MOCK_ANALYSIS,
-        paragraphs: MOCK_PARAGRAPHS,
-        reportId: "mock-report",
-        isMock: true,
-      });
-      trackEvent("report_demo_viewed", {});
-    }
+    let cancelled = false;
+    void (async () => {
+      const search = new URLSearchParams(window.location.search);
+      const exampleId = search.get("exampleId");
+      const requestedTab = search.get("tab") === "original" ? "original" : "plot";
+
+      if (exampleId) {
+        const example = await getExample(exampleId);
+        if (cancelled) return;
+        if (!example?.analysis || example.status !== "analyzed" || !example.reportId) {
+          setState({ status: "missing" });
+          return;
+        }
+        setState({
+          status: "ready",
+          analysis: example.analysis,
+          paragraphs: example.paragraphs,
+          reportId: example.reportId,
+          isMock: false,
+          initialTab: requestedTab,
+        });
+        trackEvent("report_viewed", { is_mock: false, source: "example_library" });
+        return;
+      }
+
+      const stored = loadAnalysis();
+      if (stored) {
+        setState({
+          status: "ready",
+          analysis: stored.analysis,
+          paragraphs: stored.paragraphs,
+          reportId: stored.reportId,
+          isMock: false,
+          initialTab: requestedTab,
+        });
+        trackEvent("report_viewed", { is_mock: false });
+      } else {
+        setState({
+          status: "ready",
+          analysis: MOCK_ANALYSIS,
+          paragraphs: MOCK_PARAGRAPHS,
+          reportId: "mock-report",
+          isMock: true,
+          initialTab: "plot",
+        });
+        trackEvent("report_demo_viewed", {});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (state.status === "loading") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-bg">
         <div className="text-sm text-text-muted">加载报告…</div>
+      </main>
+    );
+  }
+
+  if (state.status === "missing") {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-bg px-5 text-center">
+        <h1 className="font-serif text-2xl font-semibold text-text">这篇例文还没有可用的拆文报告</h1>
+        <Link href="/material" className="text-sm text-accent underline underline-offset-2">返回例文库</Link>
       </main>
     );
   }
@@ -195,15 +236,6 @@ export default function ReportPage() {
     setTimeout(() => window.print(), 100);
   };
 
-  const handleSubmitRating = (n: number) => {
-    setRating(n);
-    setRatingSubmitted(true);
-    trackEvent("report_rated", {
-      rating: n,
-      is_mock: state.isMock,
-    });
-  };
-
   const handleTeardownAnother = () => {
     clearAnalysis();
     window.location.href = "/upload";
@@ -224,7 +256,11 @@ export default function ReportPage() {
           </div>
         )}
 
-        <XrayReport analysis={state.analysis} paragraphs={state.paragraphs} />
+        <XrayReport
+          analysis={state.analysis}
+          paragraphs={state.paragraphs}
+          initialTab={state.initialTab}
+        />
 
         <MaterialDepositPanel
           analysis={state.analysis}
@@ -267,57 +303,23 @@ export default function ReportPage() {
           </div>
         </section>
 
-        {/* 评分 + 导出 */}
+        {/* 导出 */}
         <section className="no-print mt-6 rounded-md border border-border bg-surface p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-[0.15em] text-text-muted">
-                这份报告对你有用吗？
-              </div>
-              <div className="mt-1.5 flex items-center gap-1.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={ratingSubmitted}
-                    onClick={() => !ratingSubmitted && handleSubmitRating(n)}
-                    onMouseEnter={() => !ratingSubmitted && setRating(n)}
-                    onMouseLeave={() => !ratingSubmitted && setRating(null)}
-                    className={`font-serif text-2xl transition-colors ${
-                      rating !== null && n <= rating
-                        ? "text-primary"
-                        : "text-text-muted hover:text-accent"
-                    } ${ratingSubmitted ? "cursor-default" : ""}`}
-                    aria-label={`评 ${n} 分`}
-                  >
-                    ★
-                  </button>
-                ))}
-                <span className="ml-2 text-xs text-text-muted">/ 5</span>
-              </div>
-              {ratingSubmitted && (
-                <div className="mt-1.5 text-sm text-accent">
-                  ✓ 感谢评分 {rating}/5
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleExportPDF}
-                className="rounded-full border border-primary bg-primary px-5 py-2 font-display text-sm text-text-inverse transition-colors hover:opacity-90"
-              >
-                {pdfExported ? "✓ 正在生成…" : "导出 PDF"}
-              </button>
-              <button
-                type="button"
-                onClick={handleExport}
-                className="rounded-md border border-border bg-bg px-5 py-2 font-display text-sm text-text transition-colors hover:border-primary hover:text-primary"
-              >
-                {exported ? "✓ 已导出" : "导出 Markdown"}
-              </button>
-            </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              className="rounded-full border border-primary bg-primary px-5 py-2 font-display text-sm text-text-inverse transition-colors hover:opacity-90"
+            >
+              {pdfExported ? "✓ 正在生成…" : "导出 PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              className="rounded-md border border-border bg-bg px-5 py-2 font-display text-sm text-text transition-colors hover:border-primary hover:text-primary"
+            >
+              {exported ? "✓ 已导出" : "导出 Markdown"}
+            </button>
           </div>
         </section>
 

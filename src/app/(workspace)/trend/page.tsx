@@ -210,7 +210,7 @@ export default function TrendPage() {
     });
   };
 
-  const handleSaveToMaterial = useCallback(() => {
+  const handleSaveToMaterial = useCallback(async () => {
     if (!selected) return;
     const now = new Date().toISOString();
     const topWorks = getRepresentativeWorks(filteredSnapshots, selected.name, selected.kind);
@@ -239,7 +239,7 @@ export default function TrendPage() {
         tags: [selected.kind === "genre" ? "题材" : "元素", "趋势收藏"],
       },
     };
-    upsertMaterial(material);
+    await upsertMaterial(material);
     setSaveNotice(`已收藏到素材库灵感层：${selected.name}`);
     trackEvent("trend_element_saved", {
       element: selected.name,

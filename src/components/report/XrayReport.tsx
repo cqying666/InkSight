@@ -21,10 +21,11 @@ type Tab = "plot" | "character" | "original";
 interface Props {
   analysis: AnalysisResult;
   paragraphs: string[];
+  initialTab?: Tab;
 }
 
-export function XrayReport({ analysis, paragraphs }: Props) {
-  const [tab, setTab] = useState<Tab>("plot");
+export function XrayReport({ analysis, paragraphs, initialTab = "plot" }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   const plotLoaded = analysis.plot.status === "loaded";
   const characterLoaded = analysis.character.status === "loaded";

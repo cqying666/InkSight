@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildAnalysisMaterialCandidates,
   listFolders,
+  loadAllMaterials,
   upsertMaterial,
   type AnalysisMaterialCandidate,
+  type Material,
 } from "@/lib/material";
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
 import { trackEvent } from "@/lib/report/analytics";
@@ -36,7 +38,18 @@ export function MaterialDepositPanel({ analysis, reportId, disabled = false }: P
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const folders = listFolders();
+  const [folders, setFolders] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const materials = await loadAllMaterials();
+      if (!cancelled) setFolders(listFolders(materials));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggle = (id: string) => {
     setSelected((current) => {
@@ -59,36 +72,42 @@ export function MaterialDepositPanel({ analysis, reportId, disabled = false }: P
     });
   };
 
-  const saveSelected = () => {
+  const saveSelected = async () => {
     const chosen = candidates.filter((candidate) => selected.has(candidate.id));
-    let persistedCount = 0;
-    for (const candidate of chosen) {
-      const persisted = upsertMaterial(
-        {
-          ...candidate.material,
-          folder: folder.trim() || undefined,
-          favorited: true,
-        },
-        { preserveUserEdits: true }
-      );
-      if (!persisted) {
-        setSaveError("素材没有成功写入浏览器存储，请检查存储空间后重试。你的选择仍然保留。");
-        return;
-      }
-      persistedCount += 1;
-      trackEvent("material_saved", {
-        source: "teardown",
-        report_id: reportId,
-        material_id: candidate.id,
-        category: candidate.category,
-      });
+    const results = await Promise.all(
+      chosen.map((candidate) =>
+        upsertMaterial(
+          {
+            ...candidate.material,
+            folder: folder.trim() || undefined,
+            favorited: true,
+          },
+          { preserveUserEdits: true }
+        )
+      )
+    );
+    const persistedCount = results.filter(Boolean).length;
+    if (persistedCount < chosen.length) {
+      setSaveError("素材没有成功写入存储，请稍后重试。你的选择仍然保留。");
+      return;
     }
+    // Refresh folders after saving
+    const materials = await loadAllMaterials();
+    setFolders(listFolders(materials));
     setSaveError(null);
     setSavedCount(persistedCount);
     trackEvent("material_deposit_confirmed", {
       report_id: reportId,
       count: persistedCount,
       folder: folder.trim(),
+    });
+    chosen.forEach((candidate) => {
+      trackEvent("material_saved", {
+        source: "teardown",
+        report_id: reportId,
+        material_id: candidate.id,
+        category: candidate.category,
+      });
     });
   };
 
