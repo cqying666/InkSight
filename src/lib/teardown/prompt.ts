@@ -31,6 +31,7 @@ export async function teardownNovel(
     temperature: 0.3, // 拆解需稳定
     jsonMode: true,
     maxAttempts: 2,
+    feature: "teardown",
     validate: (parsed) => TeardownSchema.safeParse(parsed),
   });
 

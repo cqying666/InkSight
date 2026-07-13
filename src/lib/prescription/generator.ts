@@ -162,6 +162,7 @@ export async function generatePrescription(
     temperature: 0.5, // 处方需要一定创造性，温度稍高
     jsonMode: true,
     maxAttempts: 2,
+    feature: "prescription",
     validate: (parsed) => {
       // LLM 在仅一个薄弱点时常返回单对象而非数组，做归一化
       const normalized = Array.isArray(parsed)

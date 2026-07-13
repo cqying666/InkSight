@@ -24,6 +24,7 @@ export async function detectNovelType(novelText: string): Promise<{
     temperature: 0.2,
     jsonMode: true,
     maxAttempts: 2,
+    feature: "type-detection",
     validate: (parsed) => TypeResultSchema.safeParse(parsed),
   });
 

@@ -260,3 +260,23 @@ export function WorksIcon({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function AIControlIcon({ className = base }: IconProps) {
+  // AI 管理：芯片 + 闪光
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+      <path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" />
+      <path d="M12 9.5 13 11l1.5 1-1.5 1-1 1.5-1-1.5L9 12.5 10.5 11.5 12 9.5Z" />
+    </svg>
+  );
+}

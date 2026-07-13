@@ -90,6 +90,7 @@ async function runPlotAnalysis(
     jsonMode: true,
     maxAttempts: 2,
     timeout: timeoutMs,
+    feature: "analysis",
     validate: (parsed) => validatePlotAnalysis(parsed),
   });
 
@@ -116,6 +117,7 @@ async function runCharacterAnalysis(
     maxAttempts: 2,
     timeout: timeoutMs,
     maxTokens: 16384,
+    feature: "analysis",
     validate: (parsed) => validateCharacterAnalysis(parsed),
   });
 

@@ -128,6 +128,7 @@ async function classifyBatchWithLLM(
     temperature: 0.2,
     jsonMode: true,
     maxAttempts: 2,
+    feature: "trend",
     validate: (parsed) => {
       const result = ClassifyResultSchema.safeParse(parsed);
       if (!result.success) {

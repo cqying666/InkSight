@@ -1,9 +1,17 @@
 import OpenAI from "openai";
+import { getActiveModel } from "@/lib/ai/models";
+import { logCall } from "@/lib/ai/logs";
 
 /**
  * LLM 服务接入层
  * 默认使用 DeepSeek（OpenAI 兼容接口），通过 openai SDK 直接复用
  * 支持超时、重试、JSON 模式
+ *
+ * 模型来源优先级：
+ *  1. SQLite ai_models 表中 is_active=1 的配置（由 AI 管理页配置）
+ *  2. 环境变量 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL（兜底）
+ *
+ * 每次 callLLM 调用都会写入 ai_call_logs 表，用于 AI 管理页的调用消耗统计。
  *
  * DeepSeek 文档: https://api-docs.deepseek.com/
  */
@@ -11,32 +19,107 @@ import OpenAI from "openai";
 const DEFAULT_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_MODEL = "deepseek-chat";
 
-let client: OpenAI | null = null;
+/** 缓存的客户端 + 来源标识，避免每次调用都查库 */
+interface ClientEntry {
+  client: OpenAI;
+  baseURL: string;
+  apiKey: string;
+  model: string;
+  /** 来源：db / env */
+  source: "db" | "env";
+  /** 缓存写入时间，用于 TTL 失效检测 */
+  cachedAt: number;
+}
 
-function getClient(): OpenAI {
-  if (client) return client;
+let cached: ClientEntry | null = null;
+const CACHE_TTL_MS = 10_000; // 10 秒内复用，超过则重新查库（允许 UI 切换模型后较快生效）
 
-  const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "LLM_API_KEY 未配置。请复制 .env.example 为 .env.local 并填入 DeepSeek API Key。"
-    );
+/**
+ * 获取当前生效的 LLM 配置（DB 激活模型优先，env 兜底）
+ * 带 TTL 缓存，避免每次调用都查库
+ */
+export function getActiveLLMConfig(): {
+  apiKey: string;
+  baseURL: string;
+  model: string;
+  source: "db" | "env";
+} {
+  const now = Date.now();
+  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
+    return {
+      apiKey: cached.apiKey,
+      baseURL: cached.baseURL,
+      model: cached.model,
+      source: cached.source,
+    };
   }
 
-  client = new OpenAI({
-    apiKey,
-    baseURL: process.env.LLM_BASE_URL || DEFAULT_BASE_URL,
-    timeout: 300_000, // 300 秒超时（拆文/人设提示词复杂，JSON 输出耗时较长）
-    // SDK 层不重试：callLLMWithSchema 已有 maxAttempts=2 的 schema 错误重试
-    // 避免 SDK 重试 × schema 重试叠加导致最坏 4 次调用
-    maxRetries: 0,
-  });
+  // 1. 尝试 DB 激活模型
+  try {
+    const active = getActiveModel();
+    if (active && active.apiKey) {
+      cached = {
+        client: new OpenAI({
+          apiKey: active.apiKey,
+          baseURL: active.baseURL,
+          timeout: 300_000,
+          maxRetries: 0,
+        }),
+        baseURL: active.baseURL,
+        apiKey: active.apiKey,
+        model: active.model,
+        source: "db",
+        cachedAt: now,
+      };
+      return {
+        apiKey: cached.apiKey,
+        baseURL: cached.baseURL,
+        model: cached.model,
+        source: "db",
+      };
+    }
+  } catch {
+    // DB 未初始化或读取失败，回退 env
+  }
 
-  return client;
+  // 2. 回退环境变量
+  const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  const baseURL = process.env.LLM_BASE_URL || DEFAULT_BASE_URL;
+  const model = process.env.LLM_MODEL || DEFAULT_MODEL;
+  cached = {
+    client: apiKey
+      ? new OpenAI({
+          apiKey,
+          baseURL,
+          timeout: 300_000,
+          maxRetries: 0,
+        })
+      : (null as unknown as OpenAI),
+    baseURL,
+    apiKey: apiKey || "",
+    model,
+    source: "env",
+    cachedAt: now,
+  };
+  return { apiKey: apiKey || "", baseURL, model, source: "env" };
+}
+
+function getClient(): OpenAI {
+  const now = Date.now();
+  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
+    return cached.client;
+  }
+  getActiveLLMConfig();
+  return cached!.client;
+}
+
+/** 强制刷新配置缓存（AI 管理页切换模型后调用） */
+export function refreshLLMConfigCache(): void {
+  cached = null;
 }
 
 export function getModel(): string {
-  return process.env.LLM_MODEL || DEFAULT_MODEL;
+  return getActiveLLMConfig().model;
 }
 
 export interface LLMCallOptions {
@@ -50,6 +133,12 @@ export interface LLMCallOptions {
   timeout?: number;
   /** 最大输出 token 数，默认 8192（拆文/人设 JSON 较大，需放开） */
   maxTokens?: number;
+  /**
+   * 功能标识，用于 AI 管理页的调用消耗分类。
+   * 例如：teardown / trend / prescription / analysis / type-detection / coach
+   * 默认 "general"
+   */
+  feature?: string;
 }
 
 export interface LLMCallResult {
@@ -81,24 +170,43 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     temperature = 0.3,
     timeout = 300_000,
     maxTokens = 8192,
+    feature = "general",
   } = options;
 
   const openai = getClient();
   const model = getModel();
   const startTime = Date.now();
 
-  const response = await openai.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature,
-    max_tokens: maxTokens,
-    ...(jsonMode
-      ? { response_format: { type: "json_object" } }
-      : {}),
-  });
+  let response;
+  let callError: string | null = null;
+  try {
+    response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature,
+      max_tokens: maxTokens,
+      ...(jsonMode
+        ? { response_format: { type: "json_object" } }
+        : {}),
+    });
+  } catch (err) {
+    const durationMs = Date.now() - startTime;
+    callError = err instanceof Error ? err.message : String(err);
+    logCall({
+      model,
+      feature,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      durationMs,
+      success: false,
+      error: callError,
+    });
+    throw err;
+  }
 
   const durationMs = Date.now() - startTime;
   const content = response.choices[0]?.message?.content || "";
@@ -124,15 +232,25 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     }
   }
 
+  const promptTokens = response.usage?.prompt_tokens || 0;
+  const completionTokens = response.usage?.completion_tokens || 0;
+  const totalTokens = response.usage?.total_tokens || 0;
+
+  logCall({
+    model,
+    feature,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    durationMs,
+    success: true,
+  });
+
   return {
     content,
     parsed,
     truncated,
-    usage: {
-      promptTokens: response.usage?.prompt_tokens || 0,
-      completionTokens: response.usage?.completion_tokens || 0,
-      totalTokens: response.usage?.total_tokens || 0,
-    },
+    usage: { promptTokens, completionTokens, totalTokens },
     durationMs,
   };
 }

@@ -44,12 +44,17 @@ export type AnalyticsEventName =
   | "write_rated"
   | "write_view_changed"
   | "coach_message_sent"
+  | "coach_text_inserted"
   | "stuck_bubble_shown"
   | "stuck_bubble_clicked"
   | "newcomer_guide_dismissed"
   | "works_viewed"
   | "work_deleted"
-  | "work_exported";
+  | "work_exported"
+  | "work_opened"
+  | "work_marked_sold"
+  | "work_sale_cleared"
+  | "ai_control_viewed";
 
 export interface AnalyticsEvent {
   name: AnalyticsEventName;

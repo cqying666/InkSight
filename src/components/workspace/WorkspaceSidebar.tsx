@@ -8,8 +8,8 @@ import {
   CompareIcon,
   TrendIcon,
   MaterialIcon,
-  WriteIcon,
   WorksIcon,
+  AIControlIcon,
   CollapseIcon,
   ExpandIcon,
   DrawerIcon,
@@ -48,8 +48,13 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "创作",
     items: [
-      { href: "/write", label: "新建作品", Icon: WriteIcon },
       { href: "/works", label: "我的作品", Icon: WorksIcon },
+    ],
+  },
+  {
+    label: "系统",
+    items: [
+      { href: "/ai-control", label: "AI 管理", Icon: AIControlIcon },
     ],
   },
 ];

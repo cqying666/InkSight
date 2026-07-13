@@ -10,6 +10,8 @@
  *  - teardown_history: 拆文历史（JSON blob + 自增 id）
  *  - writing_documents: 创作文档（key-value，draft + documents）
  *  - analytics_events: 埋点事件（结构化列）
+ *  - ai_models: AI 模型接入配置（多模型，单一激活）
+ *  - ai_call_logs: AI 调用与消耗记录
  */
 
 import Database from "better-sqlite3";
@@ -70,6 +72,37 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_analytics_ts ON analytics_events(ts);
     CREATE INDEX IF NOT EXISTS idx_analytics_name ON analytics_events(name);
+
+    CREATE TABLE IF NOT EXISTS ai_models (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      api_key TEXT NOT NULL,
+      model TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_models_active ON ai_models(is_active);
+
+    CREATE TABLE IF NOT EXISTS ai_call_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      model TEXT NOT NULL,
+      feature TEXT NOT NULL,
+      prompt_tokens INTEGER NOT NULL DEFAULT 0,
+      completion_tokens INTEGER NOT NULL DEFAULT 0,
+      total_tokens INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      success INTEGER NOT NULL DEFAULT 1,
+      error TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_logs_ts ON ai_call_logs(ts);
+    CREATE INDEX IF NOT EXISTS idx_ai_logs_model ON ai_call_logs(model);
+    CREATE INDEX IF NOT EXISTS idx_ai_logs_feature ON ai_call_logs(feature);
   `);
 }
 
