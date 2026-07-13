@@ -4,21 +4,23 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Editor } from "@/components/write/Editor";
-import { OutlinePanel } from "@/components/write/OutlinePanel";
 import { StageGate } from "@/components/write/StageGate";
 import { NewcomerGuide } from "@/components/write/NewcomerGuide";
 import { StuckDetectionBubble } from "@/components/write/StuckDetectionBubble";
-import { AICoachPanel } from "@/components/write/AICoachPanel";
-import type { WriteOutline } from "@/lib/write/outline";
-import { loadOutline } from "@/lib/write/outline";
+import { AICoachPanel, createWelcomeMessage } from "@/components/write/AICoachPanel";
 import {
   EMPTY_WORKSPACE_DOCUMENTS,
-  outlineToCoachText,
-  saveWorkspaceDocuments,
   type WorkspaceDocumentKey,
   type WorkspaceDocuments,
 } from "@/lib/write/documents";
-import type { CoachContext } from "@/lib/write/coach-context";
+import { loadWorks, updateWorkDocuments, type WorkData } from "@/lib/write/storage";
+import type {
+  CoachContext,
+  CoachReference,
+  PanelKey,
+  ChatMessage,
+} from "@/lib/write/coach-context";
+import { buildIndex, search, type SearchResult } from "@/lib/material/search-tfidf";
 import { splitParagraphs } from "@/lib/report/session";
 import { loadAllMaterials } from "@/lib/material/catalog";
 import { materialToCoachText } from "@/lib/material/from-analysis";
@@ -54,9 +56,9 @@ type ViewKey = "draft" | "benchmark" | "outline" | "synopsis" | "characters";
 
 const REF_NAV_ITEMS: { key: ViewKey; label: string; icon: string }[] = [
   { key: "benchmark", label: "对标文", icon: "对" },
+  { key: "characters", label: "人物小传", icon: "人" },
   { key: "outline", label: "大纲", icon: "纲" },
   { key: "synopsis", label: "细纲", icon: "细" },
-  { key: "characters", label: "人物小传", icon: "人" },
 ];
 
 // 磁吸档位（左栏宽度 px）
@@ -64,6 +66,20 @@ const SNAP_WIDTHS = [320, 420, 520];
 const DEFAULT_WIDTH = 420;
 const SNAP_THRESHOLD = 24;
 const SPLIT_STORAGE_KEY = "inksight:write:split-width";
+
+// AI 教练对话历史持久化 key（半隔离：每个面板独立）
+const COACH_MESSAGES_KEY = "inksight:write:coach-messages";
+
+// 所有面板的初始欢迎消息
+function createInitialPanelMessages(): Record<PanelKey, ChatMessage[]> {
+  return {
+    draft: [createWelcomeMessage("draft")],
+    benchmark: [createWelcomeMessage("benchmark")],
+    outline: [createWelcomeMessage("outline")],
+    synopsis: [createWelcomeMessage("synopsis")],
+    characters: [createWelcomeMessage("characters")],
+  };
+}
 
 // A5：根据用户阶段判断视图推荐状态
 function getStageViewHint(
@@ -81,42 +97,14 @@ function getStageViewHint(
   return { recommended: false, dimmed: false, hint: "" };
 }
 
-// 空白态配置
-const EMPTY_STATES: Record<
-  Exclude<ViewKey, "draft">,
-  { caption: string; aphorism: string; actionLabel: string }
-> = {
-  benchmark: {
-    caption: "NO BENCHMARK YET",
-    aphorism: "先读百篇，再落一笔。",
-    actionLabel: "上传拆文生成对标文",
-  },
-  outline: {
-    caption: "NO OUTLINE YET",
-    aphorism: "骨架未立，故事无依。",
-    actionLabel: "创建大纲",
-  },
-  synopsis: {
-    caption: "NO SYNOPSIS YET",
-    aphorism: "分章而行，方知节奏。",
-    actionLabel: "开始写细纲",
-  },
-  characters: {
-    caption: "NO CHARACTERS YET",
-    aphorism: "人物有来处，故事才有根。",
-    actionLabel: "记录人物",
-  },
-};
-
 export default function WritePage() {
   const router = useRouter();
   const profile = useUserProfile();
   const stage = profile?.stage ?? "newcomer";
 
-  const [outline, setOutline] = useState<WriteOutline | null>(null);
   const [wordCount, setWordCount] = useState(0);
-  // P0-2：默认视图由初始化 effect 设置（智能判断拆文/大纲）
-  const [activeView, setActiveView] = useState<ViewKey>("outline");
+  // 默认只显示正文编辑器，参考区收起
+  const [activeView, setActiveView] = useState<ViewKey>("draft");
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [deepFocus, setDeepFocus] = useState(false);
   const [showAIOverlay, setShowAIOverlay] = useState(false);
@@ -129,6 +117,40 @@ export default function WritePage() {
   );
   const documentsRef = useRef<WorkspaceDocuments>(EMPTY_WORKSPACE_DOCUMENTS);
   const materialsRef = useRef<Material[]>([]);
+  // TF-IDF 索引（从 MaterialSidebar 提升到 WritePage，供隐式 RAG 使用）
+  const indexRef = useRef<ReturnType<typeof buildIndex> | null>(null);
+  // 当前作品 id（编辑模式从 URL 加载，新建模式由 Editor 首次保存后回填）
+  const workIdRef = useRef<string | null>(null);
+  // 参考文档 debounce 保存定时器
+  const docSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // initialWork：undefined=加载中，null=新建模式，WorkData=编辑模式
+  const [initialWork, setInitialWork] = useState<WorkData | null | undefined>(
+    undefined
+  );
+  // AI 教练对话历史（半隔离：每个面板独立维护）
+  const [panelMessages, setPanelMessages] = useState<
+    Record<PanelKey, ChatMessage[]>
+  >(() => {
+    if (typeof window === "undefined") return createInitialPanelMessages();
+    try {
+      const stored = localStorage.getItem(COACH_MESSAGES_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<
+          Record<PanelKey, ChatMessage[]>
+        >;
+        const initial = createInitialPanelMessages();
+        for (const key of Object.keys(initial) as PanelKey[]) {
+          if (parsed[key] && Array.isArray(parsed[key]!) && parsed[key]!.length > 0) {
+            initial[key] = parsed[key]!;
+          }
+        }
+        return initial;
+      }
+    } catch {
+      // ignore
+    }
+    return createInitialPanelMessages();
+  });
 
   // P0-3：分栏宽度状态
   const [splitWidth, setSplitWidth] = useState(DEFAULT_WIDTH);
@@ -148,23 +170,46 @@ export default function WritePage() {
     }
   }, []);
 
-  // P0-2：新建作品默认全部空白
+  // P0-2：根据 URL ?id=xxx 决定新建 / 编辑模式
   useEffect(() => {
     setMounted(true);
     trackEvent("write_entered", {});
     let cancelled = false;
     (async () => {
-      // 新建作品：对标文/大纲/细纲/人物小传全部为空
-      setDocuments(EMPTY_WORKSPACE_DOCUMENTS);
-      documentsRef.current = EMPTY_WORKSPACE_DOCUMENTS;
-      const storedOutline = await loadOutline();
-      if (cancelled) return;
-      setOutline(storedOutline);
-      // 默认显示大纲视图（引导先搭骨架）
-      setActiveView("outline");
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+      if (id) {
+        // 编辑模式：加载该作品的所有内容
+        const works = await loadWorks();
+        if (cancelled) return;
+        const work = works.find((w) => w.id === id);
+        if (!work) {
+          // 作品不存在，退化为新建
+          workIdRef.current = null;
+          setInitialWork(null);
+          setDocuments(EMPTY_WORKSPACE_DOCUMENTS);
+          documentsRef.current = EMPTY_WORKSPACE_DOCUMENTS;
+          return;
+        }
+        const docs = work.documents ?? EMPTY_WORKSPACE_DOCUMENTS;
+        workIdRef.current = work.id;
+        setInitialWork(work);
+        setDocuments(docs);
+        documentsRef.current = docs;
+      } else {
+        // 新建模式：对标文/大纲/细纲/人物小传全部为空
+        workIdRef.current = null;
+        setInitialWork(null);
+        setDocuments(EMPTY_WORKSPACE_DOCUMENTS);
+        documentsRef.current = EMPTY_WORKSPACE_DOCUMENTS;
+      }
     })();
     loadAllMaterials().then((mats) => {
-      if (!cancelled) materialsRef.current = mats;
+      if (!cancelled) {
+        materialsRef.current = mats;
+        // 构建 TF-IDF 索引供隐式 RAG 使用
+        indexRef.current = buildIndex(mats);
+      }
     });
     return () => {
       cancelled = true;
@@ -304,24 +349,83 @@ export default function WritePage() {
     router.push("/analyzing");
   }, [getEditorHtml, getTitle, router]);
 
-  // 获取创作上下文（供 AI 教练）
+  const updateDocument = useCallback(
+    (key: WorkspaceDocumentKey, value: string) => {
+      const next = { ...documentsRef.current, [key]: value };
+      documentsRef.current = next;
+      setDocuments(next);
+      // 编辑模式（已有 workId）：debounce 800ms 保存到作品的 documents 字段
+      // 新建模式（无 workId）：仅在内存中保留，等 Editor 首次保存正文生成 id 后再持久化
+      const workId = workIdRef.current;
+      if (workId) {
+        if (docSaveTimerRef.current) clearTimeout(docSaveTimerRef.current);
+        docSaveTimerRef.current = setTimeout(() => {
+          void updateWorkDocuments(workId, next);
+        }, 800);
+      }
+      return true;
+    },
+    []
+  );
+
+  // 获取当前面板的完整文本
+  const getPanelContent = useCallback((panel: PanelKey): string => {
+    if (panel === "draft") {
+      const editorEl = document.querySelector(
+        ".write-editor"
+      ) as HTMLDivElement | null;
+      return editorEl?.innerText || "";
+    }
+    // 参考面板：从 documents 状态读取
+    return documents[panel as WorkspaceDocumentKey] || "";
+  }, [documents]);
+
+  // 获取创作上下文（供 AI 教练）—— 半隔离：当前面板内容 + 跨面板文档只读引用
   const getCoachContext = useCallback((): CoachContext => {
-    const editorEl = document.querySelector(
-      ".write-editor"
-    ) as HTMLDivElement | null;
-    const draftText = editorEl?.innerText || "";
-    const documentReferences: CoachContext["references"] = [
-      { id: "draft", kind: "document", label: "正文", content: draftText },
-      { id: "benchmark", kind: "document", label: "对标文", content: documents.benchmark },
-      { id: "outline", kind: "document", label: "大纲", content: outlineToCoachText(outline) },
-      { id: "synopsis", kind: "document", label: "细纲", content: documents.synopsis },
-      { id: "characters", kind: "document", label: "人物小传", content: documents.characters },
-    ];
-    const references: CoachContext["references"] = documentReferences.filter(
-      (item) => item.content.trim()
-    );
+    const panelContent = getPanelContent(activeView);
+
+    // 跨面板文档引用（排除当前面板，避免重复）
+    const docLabelMap: Record<string, string> = {
+      draft: "正文",
+      benchmark: "对标文",
+      outline: "大纲",
+      synopsis: "细纲",
+      characters: "人物小传",
+    };
+    const references: CoachReference[] = [];
+
+    // 添加其他面板文档作为只读引用
+    const draftText =
+      activeView !== "draft"
+        ? (document.querySelector(".write-editor") as HTMLDivElement | null)
+            ?.innerText || ""
+        : "";
+    const otherDocs: Record<string, string> = {
+      draft: draftText,
+      benchmark: documents.benchmark,
+      outline: documents.outline,
+      synopsis: documents.synopsis,
+      characters: documents.characters,
+    };
+    for (const [key, content] of Object.entries(otherDocs)) {
+      if (key === activeView) continue; // 跳过当前面板（已作为 panelContent）
+      if (!content.trim()) continue;
+      references.push({
+        id: key,
+        kind: "document",
+        label: docLabelMap[key] || key,
+        content,
+      });
+    }
+
+    // 添加用户素材库中的收藏/手动/拆文素材（供显式勾选）
     materialsRef.current
-      .filter((material) => material.favorited || material.source === "manual" || material.source === "teardown")
+      .filter(
+        (material) =>
+          material.favorited ||
+          material.source === "manual" ||
+          material.source === "teardown"
+      )
       .forEach((material) => {
         const content = materialToCoachText(material);
         if (!content) return;
@@ -336,22 +440,109 @@ export default function WritePage() {
           content,
         });
       });
+
     return {
       title: getTitle(),
       wordCount,
+      activePanel: activeView,
+      panelContent,
       references,
     };
-  }, [documents, getTitle, outline, wordCount]);
+  }, [documents, getTitle, wordCount, activeView, getPanelContent]);
 
-  const updateDocument = useCallback(
-    (key: WorkspaceDocumentKey, value: string) => {
-      const next = { ...documentsRef.current, [key]: value };
-      documentsRef.current = next;
-      setDocuments(next);
-      void saveWorkspaceDocuments(next);
-      return true;
+  // 隐式 RAG：根据用户消息从素材库检索相关素材
+  const searchMaterials = useCallback(
+    (query: string): CoachReference[] => {
+      if (!indexRef.current || !query.trim()) return [];
+      const results = search(indexRef.current, query, {
+        topN: 3,
+        minScore: 0.06,
+      });
+      return results.map(({ material }: SearchResult) => ({
+        id: `implicit:${material.id}`,
+        kind: "material" as const,
+        label:
+          material.component?.summary.slice(0, 24) ||
+          material.inspiration?.title.slice(0, 24) ||
+          material.atom?.text.slice(0, 24) ||
+          "素材",
+        content: materialToCoachText(material).slice(0, 500),
+        implicit: true,
+      }));
     },
     []
+  );
+
+  // 半隔离：更新当前面板的对话历史，持久化到 localStorage
+  const handleMessagesChange = useCallback(
+    (messages: ChatMessage[]) => {
+      setPanelMessages((prev) => {
+        const next = { ...prev, [activeView]: messages };
+        try {
+          localStorage.setItem(COACH_MESSAGES_KEY, JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    },
+    [activeView]
+  );
+
+  // 将教练回复插入到当前面板编辑器（决策 4：对话内预览 → 一键插入）
+  const handleInsertText = useCallback(
+    (text: string) => {
+      if (!text.trim()) return;
+
+      if (activeView === "draft") {
+        // 正文：插入到 contentEditable .write-editor
+        const editor = document.querySelector(
+          ".write-editor"
+        ) as HTMLDivElement | null;
+        if (!editor) return;
+        editor.focus();
+        const sel = window.getSelection();
+        let inserted = false;
+        if (
+          sel &&
+          sel.rangeCount > 0 &&
+          editor.contains(sel.getRangeAt(0).commonAncestorContainer)
+        ) {
+          inserted = document.execCommand("insertText", false, text);
+        } else {
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+          inserted = document.execCommand("insertText", false, text);
+        }
+        if (inserted) {
+          window.dispatchEvent(new Event("inksight:editor-change"));
+        }
+      } else {
+        // 参考面板：插入到对应 textarea
+        const ta = document.querySelector(
+          `textarea[data-panel="${activeView}"]`
+        ) as HTMLTextAreaElement | null;
+        if (!ta) return;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const newValue =
+          ta.value.slice(0, start) + text + ta.value.slice(end);
+        updateDocument(activeView as WorkspaceDocumentKey, newValue);
+        // 恢复光标到插入文本之后
+        requestAnimationFrame(() => {
+          ta.focus();
+          ta.selectionStart = ta.selectionEnd = start + text.length;
+        });
+      }
+      trackEvent("coach_text_inserted", {
+        panel: activeView,
+        length: text.length,
+      });
+    },
+    [activeView, updateDocument]
   );
 
   const handleExpandMaterial = useCallback(() => {
@@ -359,17 +550,10 @@ export default function WritePage() {
     setMaterialExpanded((v) => !v);
   }, [materialMounted]);
 
-  // 判断左栏某文档是否有内容
-  const hasContent = useCallback(
-    (view: ViewKey): boolean => {
-      if (view === "outline") return !!outline;
-      if (view === "benchmark") return !!documents.benchmark.trim();
-      if (view === "synopsis") return !!documents.synopsis.trim();
-      if (view === "characters") return !!documents.characters.trim();
-      return false;
-    },
-    [outline, documents]
-  );
+  // Editor 首次保存生成作品 id 后回调：切换为编辑模式，后续参考文档编辑可独立持久化
+  const handleWorkIdGenerated = useCallback((id: string) => {
+    workIdRef.current = id;
+  }, []);
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-bg">
@@ -378,7 +562,7 @@ export default function WritePage() {
         <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-text/[0.06] px-5">
           <div className="flex items-baseline gap-3">
             <span className="font-serif text-base font-semibold text-text">
-              新建作品
+              {initialWork ? "编辑作品" : "新建作品"}
             </span>
             <span className="font-mono text-[10px] text-text-muted">
               {wordCount > 0 ? `${wordCount} 字` : "未开始"}
@@ -540,13 +724,6 @@ export default function WritePage() {
               })}
             </div>
 
-            {!navCollapsed && (
-              <div className="flex-shrink-0 border-t border-text/[0.06] px-3 py-2">
-                <div className="font-mono text-[9px] text-text-muted/50">
-                  文档导航
-                </div>
-              </div>
-            )}
           </nav>
         )}
 
@@ -579,58 +756,43 @@ export default function WritePage() {
                   </button>
                 </div>
 
-                {/* 参考区内容 / 空白态 */}
+                {/* 参考区内容 */}
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                  {activeView === "benchmark" &&
-                    (hasContent("benchmark") ? (
-                      <WorkspaceDocumentEditor
-                        title="对标文"
-                        eyebrow="Benchmark"
-                        value={documents.benchmark}
-                        placeholder="上传拆文后，原文会自动同步到这里。也可以粘贴新的对标文，并随时编辑批注。"
-                        onChange={(value) => updateDocument("benchmark", value)}
-                      />
-                    ) : (
-                      <EmptyState {...EMPTY_STATES.benchmark} />
-                    ))}
+                  {activeView === "benchmark" && (
+                    <WorkspaceDocumentEditor
+                      value={documents.benchmark}
+                      placeholder="粘贴对标文，随时编辑批注…"
+                      onChange={(value) => updateDocument("benchmark", value)}
+                      panelId="benchmark"
+                    />
+                  )}
 
-                  {activeView === "outline" &&
-                    (outline ? (
-                      <div className="px-6 py-6">
-                        <OutlinePanel onOutlineChange={setOutline} />
-                      </div>
-                    ) : (
-                      <EmptyState
-                        {...EMPTY_STATES.outline}
-                        onAction={() => setActiveView("outline")}
-                      />
-                    ))}
+                  {activeView === "outline" && (
+                    <WorkspaceDocumentEditor
+                      value={documents.outline}
+                      placeholder="按章节创造大纲…"
+                      onChange={(value) => updateDocument("outline", value)}
+                      panelId="outline"
+                    />
+                  )}
 
-                  {activeView === "synopsis" &&
-                    (hasContent("synopsis") ? (
-                      <WorkspaceDocumentEditor
-                        title="细纲"
-                        eyebrow="Detailed outline"
-                        value={documents.synopsis}
-                        placeholder="按章节写下事件推进、情绪变化、卡点与反转。"
-                        onChange={(value) => updateDocument("synopsis", value)}
-                      />
-                    ) : (
-                      <EmptyState {...EMPTY_STATES.synopsis} />
-                    ))}
+                  {activeView === "synopsis" && (
+                    <WorkspaceDocumentEditor
+                      value={documents.synopsis}
+                      placeholder="按章节写下事件推进、情绪变化、卡点与反转…"
+                      onChange={(value) => updateDocument("synopsis", value)}
+                      panelId="synopsis"
+                    />
+                  )}
 
-                  {activeView === "characters" &&
-                    (hasContent("characters") ? (
-                      <WorkspaceDocumentEditor
-                        title="人物小传"
-                        eyebrow="Character bible"
-                        value={documents.characters}
-                        placeholder="记录人物的来处、欲望、恐惧、关系、转折与最终变化。"
-                        onChange={(value) => updateDocument("characters", value)}
-                      />
-                    ) : (
-                      <EmptyState {...EMPTY_STATES.characters} />
-                    ))}
+                  {activeView === "characters" && (
+                    <WorkspaceDocumentEditor
+                      value={documents.characters}
+                      placeholder="记录人物的来处、欲望、恐惧、关系、转折与最终变化…"
+                      onChange={(value) => updateDocument("characters", value)}
+                      panelId="characters"
+                    />
+                  )}
                 </div>
               </section>
 
@@ -658,12 +820,22 @@ export default function WritePage() {
 
           {/* 右栏：正文编辑器（始终常驻） */}
           <div className="relative flex min-w-0 flex-1 flex-col">
-            <Editor
-              onFocusModeChange={setDeepFocus}
-              onWordCountChange={setWordCount}
-              outline={outline}
-              onOpenCoach={() => setShowAIOverlay(true)}
-            />
+            {initialWork === undefined ? (
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="text-sm text-text-muted">加载作品…</div>
+              </div>
+            ) : (
+              <Editor
+                onFocusModeChange={setDeepFocus}
+                onWordCountChange={setWordCount}
+                onOpenCoach={() => setShowAIOverlay(true)}
+                initialWorkId={initialWork?.id}
+                initialTitle={initialWork?.title}
+                initialHtml={initialWork?.html}
+                documentsRef={documentsRef}
+                onWorkIdGenerated={handleWorkIdGenerated}
+              />
+            )}
             {/* A6：新手引导浮层 */}
             {stage === "newcomer" && (
               <NewcomerGuide onNavigate={(v) => setActiveView(v)} />
@@ -672,7 +844,7 @@ export default function WritePage() {
             {!deepFocus && (
               <StageGate
                 wordCount={wordCount}
-                hasOutline={!!outline}
+                hasOutline={!!documents.outline.trim()}
                 onAnalyze={handleAnalyze}
               />
             )}
@@ -702,7 +874,7 @@ export default function WritePage() {
                 </button>
                 {materialMounted ? (
                   <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3">
-                    <MaterialSidebar outline={outline} />
+                    <MaterialSidebar />
                   </div>
                 ) : null}
               </>
@@ -770,7 +942,7 @@ export default function WritePage() {
               </button>
             </div>
             <div className="h-[calc(100%-36px)] overflow-y-auto">
-              <MaterialSidebar outline={outline} />
+              <MaterialSidebar />
             </div>
           </div>
         </div>
@@ -778,55 +950,37 @@ export default function WritePage() {
 
       {/* ===== AI 教练 Portal Overlay ===== */}
       {showAIOverlay && mounted && (
-        <AICoachOverlay onClose={() => setShowAIOverlay(false)} getContext={getCoachContext} />
+        <AICoachOverlay
+          onClose={() => setShowAIOverlay(false)}
+          activePanel={activeView}
+          getContext={getCoachContext}
+          searchMaterials={searchMaterials}
+          messages={panelMessages[activeView] ?? [createWelcomeMessage(activeView)]}
+          onMessagesChange={handleMessagesChange}
+          onInsertText={handleInsertText}
+        />
       )}
     </main>
-  );
-}
-
-// ===== 空白态组件（文学杂志式） =====
-function EmptyState({
-  caption,
-  aphorism,
-  actionLabel,
-  onAction,
-}: {
-  caption: string;
-  aphorism: string;
-  actionLabel: string;
-  onAction?: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center px-8 py-20 text-center">
-      {/* 编辑性短分隔线 */}
-      <div className="w-8 border-t border-text/[0.10]" />
-      {/* mono caption */}
-      <span className="mt-4 font-mono text-[9px] uppercase tracking-[0.18em] text-text-muted/60">
-        {caption}
-      </span>
-      {/* serif 引言 */}
-      <p className="mt-3 font-serif text-sm italic text-text-muted">
-        {aphorism}
-      </p>
-      {/* ghost 按钮 */}
-      <button
-        type="button"
-        onClick={onAction}
-        className="mt-6 rounded-full border border-text/[0.10] px-4 py-1.5 font-serif text-xs text-text-muted transition-colors hover:border-accent-warm hover:text-accent-warm"
-      >
-        {actionLabel}
-      </button>
-    </div>
   );
 }
 
 // ===== AI 教练 Portal Overlay =====
 function AICoachOverlay({
   onClose,
+  activePanel,
   getContext,
+  searchMaterials,
+  messages,
+  onMessagesChange,
+  onInsertText,
 }: {
   onClose: () => void;
+  activePanel: PanelKey;
   getContext: () => CoachContext;
+  searchMaterials?: (query: string) => CoachReference[];
+  messages: ChatMessage[];
+  onMessagesChange: (messages: ChatMessage[]) => void;
+  onInsertText?: (text: string) => void;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -853,7 +1007,16 @@ function AICoachOverlay({
         className="relative flex h-[60vh] w-full max-w-[560px] flex-col overflow-hidden rounded-lg border border-text/[0.06] bg-surface shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <AICoachPanel overlay onClose={onClose} getContext={getContext} />
+        <AICoachPanel
+          overlay
+          onClose={onClose}
+          activePanel={activePanel}
+          getContext={getContext}
+          searchMaterials={searchMaterials}
+          messages={messages}
+          onMessagesChange={onMessagesChange}
+          onInsertText={onInsertText}
+        />
       </div>
     </div>,
     document.body

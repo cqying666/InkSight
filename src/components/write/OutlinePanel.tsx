@@ -73,34 +73,29 @@ export function OutlinePanel({ onOutlineChange }: Props) {
   // ===== 未创建大纲时：选择入口 =====
   if (!outline) {
     return (
-      <div className="rounded-sm border border-accent bg-bg-alt p-4">
-        <div className="text-xs uppercase tracking-[0.15em] text-text-muted">
-          结构大纲
-        </div>
-        <p className="mt-1.5 text-sm text-text">
+      <div className="space-y-3">
+        <p className="text-sm text-text-muted">
           搭建作品结构骨架，创作时显示参考线
         </p>
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="rounded-full border border-primary bg-primary px-4 py-1.5 font-serif text-xs text-inverse transition-colors hover:bg-primary"
-          >
-            创建空白大纲
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleCreate}
+          className="rounded-full border border-text/[0.10] px-4 py-1.5 font-serif text-xs text-text-muted transition-colors hover:border-accent-warm hover:text-accent-warm"
+        >
+          创建空白大纲
+        </button>
       </div>
     );
   }
 
   // ===== 已有大纲：编辑界面 =====
   return (
-    <div className="rounded-sm border border-accent bg-bg-alt">
+    <div>
       {/* 折叠头部 */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-2.5"
+        className="flex w-full items-center justify-between py-2.5"
       >
         <span className="font-serif text-sm font-semibold text-text">
           结构大纲
@@ -111,7 +106,7 @@ export function OutlinePanel({ onOutlineChange }: Props) {
       </button>
 
       {expanded && (
-        <div className="space-y-4 px-4 pb-4">
+        <div className="space-y-4 pb-4">
           {/* 钩子类型 */}
           <Field label="开头钩子">
             <select

@@ -9,16 +9,27 @@
 const CN_CHARS_PER_MIN = 400;
 
 /**
- * 从纯文本计算字数（中文字符 + 英文单词）
+ * 从纯文本计算字数
+ *
+ * 对齐 WPS「字数」口径：中文字符（含中文标点、省略号）每个算 1 字，
+ * 连续英文字母算 1 词，连续数字算 1 词。
+ *
+ * 中文标点范围：
+ *  - CJK 符号和标点 U+3000–U+303F
+ *  - CJK 兼容形式 U+FE30–U+FE4F
+ *  - 全角形式 U+FF00–U+FFEF
+ *  - 通用标点中的省略号 … U+2026、破折号 — U+2014
  */
 export function countWords(text: string): number {
   if (!text) return 0;
-  // 中文字符
-  const cnChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-  // 英文单词（去掉中文后按空格分）
-  const enText = text.replace(/[\u4e00-\u9fff]/g, " ").trim();
-  const enWords = enText ? enText.split(/\s+/).filter((w) => /[a-zA-Z]/.test(w)).length : 0;
-  return cnChars + enWords;
+  // 中文字符（含中文标点 + 省略号 + 破折号）
+  const cnRe =
+    /[\u2e80-\u2eff\u3000-\u303f\u31c0-\u31ef\u3200-\u32ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef\u2026\u2014]/g;
+  const cnChars = (text.match(cnRe) || []).length;
+  // 剩余文本中提取英文单词和数字串
+  const rest = text.replace(cnRe, " ");
+  const enTokens = (rest.match(/[a-zA-Z0-9]+/g) || []).length;
+  return cnChars + enTokens;
 }
 
 /**

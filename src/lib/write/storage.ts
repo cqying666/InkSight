@@ -8,9 +8,21 @@
  * 作品列表（works）：用户保存确认后归档，key="works"，data 为 WorkData[]
  */
 
+import type { WorkspaceDocuments } from "./documents";
+import type { Sale } from "./sale";
+
 const DOC_KEY = "draft";
 const WORKS_KEY = "works";
 const SAVE_INTERVAL_MS = 30_000;
+
+// 互斥锁：防止多个写操作并发执行导致读-改-写竞态（数据丢失）
+let _worksMutex: Promise<void> = Promise.resolve();
+function withWorksLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = _worksMutex;
+  let resolve!: () => void;
+  _worksMutex = new Promise<void>((r) => { resolve = r; });
+  return prev.then(() => fn()).finally(resolve);
+}
 
 export interface DraftData {
   id: string; // 稳定标识，首次保存时生成
@@ -21,8 +33,13 @@ export interface DraftData {
   completedAt?: number;
 }
 
-/** 作品数据（与草稿结构一致，归档后存入 works 列表） */
-export type WorkData = DraftData;
+/** 作品数据（草稿结构 + 每篇作品独立的参考文档 + 售出信息） */
+export interface WorkData extends DraftData {
+  /** 该作品对应的对标文/大纲/细纲/人物小传，编辑时随作品一起保存 */
+  documents?: WorkspaceDocuments;
+  /** 售出信息（未标记售出时为 undefined） */
+  sale?: Sale;
+}
 
 /**
  * 加载草稿
@@ -109,28 +126,95 @@ export async function loadWorks(): Promise<WorkData[]> {
 
 /** 新增或更新一条作品（按 id upsert） */
 export async function upsertWork(work: WorkData): Promise<void> {
-  const works = await loadWorks();
-  const idx = works.findIndex((w) => w.id === work.id);
-  if (idx >= 0) {
-    works[idx] = work;
-  } else {
-    works.unshift(work);
-  }
-  await fetch("/api/writing-documents", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: WORKS_KEY, data: works }),
+  return withWorksLock(async () => {
+    const works = await loadWorks();
+    const idx = works.findIndex((w) => w.id === work.id);
+    if (idx >= 0) {
+      works[idx] = work;
+    } else {
+      works.unshift(work);
+    }
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: WORKS_KEY, data: works }),
+    });
   });
 }
 
 /** 删除一条作品（按 id） */
 export async function deleteWork(id: string): Promise<void> {
-  const works = await loadWorks();
-  const filtered = works.filter((w) => w.id !== id);
-  await fetch("/api/writing-documents", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: WORKS_KEY, data: filtered }),
+  return withWorksLock(async () => {
+    const works = await loadWorks();
+    const filtered = works.filter((w) => w.id !== id);
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: WORKS_KEY, data: filtered }),
+    });
+  });
+}
+
+/**
+ * 仅更新某条作品的参考文档（对标文/大纲/细纲/人物小传）
+ *
+ * 用于编辑模式下参考文档的及时保存：保留 title/html/plainText 等其他字段不变，
+ * 只覆盖 documents 字段。
+ */
+export async function updateWorkDocuments(
+  workId: string,
+  documents: WorkspaceDocuments
+): Promise<void> {
+  return withWorksLock(async () => {
+    const works = await loadWorks();
+    const idx = works.findIndex((w) => w.id === workId);
+    if (idx < 0) return;
+    works[idx] = { ...works[idx], documents };
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: WORKS_KEY, data: works }),
+    });
+  });
+}
+
+/**
+ * 更新某条作品的售出信息
+ *
+ * 标记售出 / 修改售出信息时调用，保留其他字段不变，只覆盖 sale 字段。
+ */
+export async function updateWorkSale(
+  workId: string,
+  sale: Sale
+): Promise<void> {
+  return withWorksLock(async () => {
+    const works = await loadWorks();
+    const idx = works.findIndex((w) => w.id === workId);
+    if (idx < 0) return;
+    works[idx] = { ...works[idx], sale };
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: WORKS_KEY, data: works }),
+    });
+  });
+}
+
+/**
+ * 取消某条作品的售出标记（移除 sale 字段）
+ */
+export async function clearWorkSale(workId: string): Promise<void> {
+  return withWorksLock(async () => {
+    const works = await loadWorks();
+    const idx = works.findIndex((w) => w.id === workId);
+    if (idx < 0) return;
+    const { sale: _sale, ...rest } = works[idx];
+    works[idx] = rest;
+    await fetch("/api/writing-documents", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: WORKS_KEY, data: works }),
+    });
   });
 }
 

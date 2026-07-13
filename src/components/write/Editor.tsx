@@ -13,13 +13,44 @@ import {
 } from "@/lib/write/storage";
 import { countWords, estimateReadingTime } from "@/lib/write/stats";
 import { trackEvent } from "@/lib/report/analytics";
-import { StructureGuide } from "./StructureGuide";
-import type { WriteOutline } from "@/lib/write/outline";
+import type { WorkspaceDocuments } from "@/lib/write/documents";
+
+/**
+ * 旧数据兼容处理：
+ * 1) 移除 h2 上的 class="chapter-title"（StarterKit heading schema 不支持 class）
+ * 2) 外部粘贴的纯文本含 \r\n，曾被合并进单个 <p>，加载时段落分隔丢失。
+ *    把 <p>...</p> 内的 \r\n 拆成多个 <p>，恢复段落结构。
+ *    若包含「第N章」行，识别为章节标题，转为 <h2>。
+ */
+function normalizeLegacyHtml(html: string): string {
+  let out = html.replace(/<h2\s+class="chapter-title">/g, "<h2>");
+  // 拆分 <p>...</p> 内的 \r\n（或多个连续 \n）为多个段落
+  out = out.replace(/<p>([\s\S]*?)<\/p>/g, (full, inner: string) => {
+    if (!/\r\n|\n{2,}/.test(inner)) return full;
+    const lines = inner
+      .split(/\r\n|\n{2,}/)
+      .map((s) => s.replace(/^\n+|\n+$/g, "").trim())
+      .filter((s) => s.length > 0);
+    if (lines.length <= 1) return full;
+    return lines
+      .map((line) => {
+        // 「第N章」开头识别为章节标题
+        if (/^第[一二三四五六七八九十百零\d]+章/.test(line)) {
+          return `<h2>${line}</h2>`;
+        }
+        return `<p>${line}</p>`;
+      })
+      .join("");
+  });
+  return out;
+}
 
 /**
  * 新建作品编辑器内核（Tiptap 版）
  *
- * 每次进入都是空白页（不加载旧草稿）。用户输入后自动保存到「我的作品」。
+ * - 无 initialWorkId 时为「新建」模式：每次进入都是空白页
+ * - 有 initialWorkId 时为「编辑」模式：用作品的 title/html 灌入初始值
+ * 用户输入后自动保存到「我的作品」（含参考文档）。
  * - 工具栏精简为 4 核心按钮 + 更多 overflow（A2）
  * - 字数统计 debounce 300ms + dirty 标记（A1）
  * - 自动归档到作品列表（30s + 失焦 + beforeunload + 卸载）
@@ -28,24 +59,43 @@ import type { WriteOutline } from "@/lib/write/outline";
 interface Props {
   onFocusModeChange?: (focusMode: boolean) => void;
   onWordCountChange?: (count: number) => void;
-  outline?: WriteOutline | null;
   onOpenCoach?: () => void;
+  /** 编辑模式：作品 id（用于 upsert 同一篇作品） */
+  initialWorkId?: string;
+  /** 编辑模式：作品标题，灌入标题输入框 */
+  initialTitle?: string;
+  /** 编辑模式：作品正文 HTML，灌入 Tiptap */
+  initialHtml?: string;
+  /** 参考文档 ref，保存作品时一并写入 */
+  documentsRef?: React.MutableRefObject<WorkspaceDocuments>;
+  /** 新建模式下首次保存生成作品 id 后回调，供父组件切换为编辑模式保存参考文档 */
+  onWorkIdGenerated?: (id: string) => void;
 }
 
 const FONT_SCALE_KEY = "inksight:write:font-scale";
 const FONT_SCALES = [15, 17, 19, 22];
 const DEFAULT_FONT_SCALE = 17;
 
-export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCoach }: Props) {
+export function Editor({
+  onFocusModeChange,
+  onWordCountChange,
+  onOpenCoach,
+  initialWorkId,
+  initialTitle,
+  initialHtml,
+  documentsRef,
+  onWorkIdGenerated,
+}: Props) {
   const titleRef = useRef<HTMLInputElement>(null);
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   const hasLoadedRef = useRef(false);
   const writingStartedRef = useRef(false);
-  const workIdRef = useRef<string | null>(null);
+  const workIdRef = useRef<string | null>(initialWorkId ?? null);
   const onWordCountChangeRef = useRef(onWordCountChange);
   const onFocusModeChangeRef = useRef(onFocusModeChange);
   const onOpenCoachRef = useRef(onOpenCoach);
+  const onWorkIdGeneratedRef = useRef(onWorkIdGenerated);
   const saveFnRef = useRef<() => Promise<boolean>>(async () => false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +121,9 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
     onOpenCoachRef.current = onOpenCoach;
   }, [onOpenCoach]);
   useEffect(() => {
+    onWorkIdGeneratedRef.current = onWorkIdGenerated;
+  }, [onWorkIdGenerated]);
+  useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
 
@@ -85,11 +138,17 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
         emptyNodeClass: "is-editor-empty",
       }),
     ],
-    content: "",
+    // 旧数据兼容：
+    // 1) 移除 h2 上的 class="chapter-title"（StarterKit heading schema 不支持 class）
+    // 2) 外部粘贴的纯文本含 \r\n，曾被合并进单个 <p>，加载时段落分隔丢失。
+    //    把 <p>...</p> 内的 \r\n 拆成多个 <p>，恢复段落结构。
+    content: initialHtml
+      ? normalizeLegacyHtml(initialHtml)
+      : "",
     editorProps: {
       attributes: {
         class:
-          "write-editor min-h-[55vh] flex-1 font-serif leading-[1.9] text-text outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-text-muted [&_.chapter-title]:mt-6 [&_.chapter-title]:border-b [&_.chapter-title]:border-accent [&_.chapter-title]:pb-1 [&_.chapter-title]:font-serif [&_.chapter-title]:text-xl [&_.chapter-title]:font-semibold [&_hr]:my-4 [&_hr]:border-none [&_p]:my-1.5",
+          "write-editor min-h-[55vh] flex-1 font-serif leading-[1.9] text-text outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-text-muted [&_h2]:mt-6 [&_h2]:border-b [&_h2]:border-accent [&_h2]:pb-1 [&_h2]:font-serif [&_h2]:text-xl [&_h2]:font-semibold [&_hr]:my-4 [&_hr]:border-none [&_p]:my-1.5",
         style: `font-size: ${fontScale}px`,
       },
       // 粘贴纯文本，去除格式
@@ -149,6 +208,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
     const plainText = editor.getText();
     if (!title && !plainText) return false;
     const savedAt = Date.now();
+    const wasNew = workIdRef.current === null;
     const id = workIdRef.current ?? generateId();
     const work: WorkData = {
       id,
@@ -157,8 +217,12 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
       plainText,
       savedAt,
       completedAt: savedAt,
+      documents: documentsRef?.current,
     };
     workIdRef.current = id;
+    if (wasNew) {
+      onWorkIdGeneratedRef.current?.(id);
+    }
     try {
       await upsertWork(work);
     } catch {
@@ -171,17 +235,24 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
     setSaveError(false);
     trackEvent("draft_saved", { word_count: countWords(plainText) });
     return true;
-  }, [editor]);
+  }, [editor, documentsRef]);
 
   useEffect(() => {
     saveFnRef.current = handleSave;
   }, [handleSave]);
 
-  // ===== 初始化：空白页（不加载旧草稿）+ 恢复专注模式 + 字号 =====
+  // ===== 初始化：编辑模式灌入内容后同步字数 + 恢复专注模式 + 字号 =====
   useEffect(() => {
     if (!editor) return;
     setMounted(true);
     hasLoadedRef.current = true;
+    // 编辑模式：加载已有内容后立即同步字数统计
+    if (initialHtml) {
+      const text = editor.getText();
+      const wc = countWords(text);
+      setWordCount(wc);
+      onWordCountChangeRef.current?.(wc);
+    }
     try {
       if (localStorage.getItem(FOCUS_KEY) === "1") {
         setFocusMode(true);
@@ -195,7 +266,8 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
     } catch {
       // ignore
     }
-  }, [editor, FOCUS_KEY, FONT_SCALE_KEY]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, FOCUS_KEY, FONT_SCALE_KEY, initialHtml]);
 
   // ===== 自动保存 30s =====
   useEffect(() => {
@@ -235,6 +307,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
             plainText,
             savedAt,
             completedAt: savedAt,
+            documents: documentsRef?.current,
           };
           void upsertWork(work);
         }
@@ -242,7 +315,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [editor]);
+  }, [editor, documentsRef]);
 
   // ===== 卸载时保存 =====
   useEffect(() => {
@@ -263,12 +336,13 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
             plainText,
             savedAt,
             completedAt: savedAt,
+            documents: documentsRef?.current,
           };
           void upsertWork(work);
         }
       }
     };
-  }, [editor]);
+  }, [editor, documentsRef]);
 
   // ===== overflow 点击外部关闭 =====
   useEffect(() => {
@@ -296,11 +370,11 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
   // ===== 插入章节 =====
   const insertChapter = useCallback(() => {
     if (!editor) return;
-    const existing = editor.view.dom.querySelectorAll(".chapter-title").length;
+    const existing = editor.view.dom.querySelectorAll("h2").length;
     const chapterNum = existing + 2;
     const chineseNum = ["二", "三", "四", "五", "六", "七", "八", "九", "十"][chapterNum - 2] || String(chapterNum);
     const chapterTitle = `第${chineseNum}章`;
-    editor.chain().focus().insertContent(`<h2 class="chapter-title">${chapterTitle}</h2><p></p>`).run();
+    editor.chain().focus().insertContent(`<h2>${chapterTitle}</h2><p></p>`).run();
     setShowOverflow(false);
   }, [editor]);
 
@@ -346,7 +420,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
       editorProps: {
         attributes: {
           class:
-            "write-editor min-h-[55vh] flex-1 font-serif leading-[1.9] text-text outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-text-muted [&_.chapter-title]:mt-6 [&_.chapter-title]:border-b [&_.chapter-title]:border-accent [&_.chapter-title]:pb-1 [&_.chapter-title]:font-serif [&_.chapter-title]:text-xl [&_.chapter-title]:font-semibold [&_hr]:my-4 [&_hr]:border-none [&_p]:my-1.5",
+            "write-editor min-h-[55vh] flex-1 font-serif leading-[1.9] text-text outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-text-muted [&_h2]:mt-6 [&_h2]:border-b [&_h2]:border-accent [&_h2]:pb-1 [&_h2]:font-serif [&_h2]:text-xl [&_h2]:font-semibold [&_hr]:my-4 [&_hr]:border-none [&_p]:my-1.5",
           style: `font-size: ${fontScale}px`,
         },
       },
@@ -559,6 +633,7 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
           <input
             ref={titleRef}
             type="text"
+            defaultValue={initialTitle ?? ""}
             placeholder="为新作品起个标题…"
             onBlur={() => {
               if (dirtyRef.current) void saveFnRef.current();
@@ -568,13 +643,8 @@ export function Editor({ onFocusModeChange, onWordCountChange, outline, onOpenCo
           />
         </div>
 
-        {/* 编辑区 + 结构参考线 */}
-        <div className="mx-auto flex max-w-4xl px-6 py-6">
-          {!focusMode && outline && (
-            <div className="no-print mr-2 min-h-[55vh]">
-              <StructureGuide outline={outline} />
-            </div>
-          )}
+        {/* 编辑区 */}
+        <div className="mx-auto max-w-4xl px-6 py-6">
           <EditorContent editor={editor} className="flex-1" />
         </div>
       </div>

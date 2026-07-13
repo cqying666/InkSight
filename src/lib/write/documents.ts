@@ -10,12 +10,13 @@ import type { WriteOutline } from "./outline";
 
 const DOC_KEY = "documents";
 
-export type WorkspaceDocumentKey = "benchmark" | "synopsis" | "characters";
+export type WorkspaceDocumentKey = "benchmark" | "outline" | "synopsis" | "characters";
 
 export type WorkspaceDocuments = Record<WorkspaceDocumentKey, string>;
 
 export const EMPTY_WORKSPACE_DOCUMENTS: WorkspaceDocuments = {
   benchmark: "",
+  outline: "",
   synopsis: "",
   characters: "",
 };
@@ -32,6 +33,7 @@ export async function loadWorkspaceDocuments(): Promise<WorkspaceDocuments> {
     const parsed = data as Partial<WorkspaceDocuments>;
     return {
       benchmark: parsed.benchmark ?? "",
+      outline: parsed.outline ?? "",
       synopsis: parsed.synopsis ?? "",
       characters: parsed.characters ?? "",
     };
