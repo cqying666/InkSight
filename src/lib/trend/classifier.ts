@@ -18,7 +18,7 @@ import { trackEvent } from "../report/analytics";
  *  - 批量调用：一次 LLM 处理最多 20 条 entry（降低 API 成本）
  *  - Zod schema 校验 LLM 输出
  *  - 降级机制：
- *    1. LLM_API_KEY 未配置 → 规则版（标题关键词匹配 GENRE_POOL/ELEMENT_POOL）
+ *    1. AI 管理页未配置激活模型 → 规则版（标题关键词匹配 GENRE_POOL/ELEMENT_POOL）
  *    2. LLM 调用失败 / schema 校验失败 → 规则版降级
  *  - 复用 callLLMWithSchema（已有重试 + JSON 模式 + schema 校验）
  *
@@ -197,7 +197,7 @@ async function classifyBatchWithLLM(
  *
  * 准确率约 70-80%（仅字面匹配，无语义理解）
  * 用于：
- *  - LLM_API_KEY 未配置时
+ *  - AI 管理页未配置激活模型时
  *  - LLM 调用失败时
  *  - 测试 / mock 场景
  */

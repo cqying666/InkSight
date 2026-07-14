@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getActiveModel } from "@/lib/ai/models";
 
 /**
  * 健康检查接口
@@ -6,18 +7,27 @@ import { NextRequest, NextResponse } from "next/server";
  */
 
 export async function GET() {
-  const hasLLM = !!(process.env.LLM_API_KEY || process.env.OPENAI_API_KEY);
-  const hasSupabase = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let llmStatus: "configured" | "missing" = "missing";
+  let llmModel = "";
+  let llmBaseUrl = "";
+  try {
+    const active = getActiveModel();
+    if (active && active.apiKey) {
+      llmStatus = "configured";
+      llmModel = active.model;
+      llmBaseUrl = active.baseURL;
+    }
+  } catch {
+    // DB 未初始化
+  }
 
   return NextResponse.json({
     status: "ok",
     service: "InkSight 创作教练",
-    phase: "Phase 0 — 管线骨架",
     config: {
-      llm: hasLLM ? "configured" : "missing",
-      llmModel: process.env.LLM_MODEL || "deepseek-chat",
-      llmBaseUrl: process.env.LLM_BASE_URL || "https://api.deepseek.com",
-      supabase: hasSupabase ? "configured" : "missing",
+      llm: llmStatus,
+      llmModel,
+      llmBaseUrl,
     },
     timestamp: new Date().toISOString(),
   });

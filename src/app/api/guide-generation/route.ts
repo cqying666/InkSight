@@ -97,11 +97,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "未知错误";
-    if (message.includes("LLM_API_KEY") || message.includes("OPENAI_API_KEY")) {
+    if (message.includes("未配置")) {
       return NextResponse.json(
         {
           error: "LLM 服务未配置",
-          hint: "请复制 .env.example 为 .env.local 并填入 LLM_API_KEY",
+          hint: "请在 AI 管理页添加并激活一个模型",
         },
         { status: 503 },
       );

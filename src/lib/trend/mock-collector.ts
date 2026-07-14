@@ -26,7 +26,7 @@ import { GENRE_POOL, ELEMENT_POOL } from "./labels";
  *  - 题材/元素标签：
  *    - 默认（useLLMClassification=false）：从预置词表随机组合（保持 mock 可复现）
  *    - 开启 useLLMClassification=true：先生成 mock 标题，再调 LLM 分类填 genres/elements
- *      （P4-T4，需配置 LLM_API_KEY；失败时降级规则版字面匹配）
+ *      （P4-T4，需在 AI 管理页配置激活模型；失败时降级规则版字面匹配）
  *  - 热度值用 LCG PRNG 可复现（与 synthetic-seeds 一致风格）
  *  - 生成单日快照，可指定 date
  */
@@ -238,9 +238,9 @@ export interface MockCollectOptions {
   platforms?: PlatformValue[];
   /**
    * 是否走 LLM 标签分类（P4-T4）
-   *  - false（默认）：词表随机组合（mock 可复现，无需 LLM_API_KEY）
+   *  - false（默认）：词表随机组合（mock 可复现，无需配置模型）
    *  - true：用更自然的标题模板，调 LLM 分类填 genres/elements
-   *    （需配置 LLM_API_KEY；失败降级规则版字面匹配）
+   *    （需在 AI 管理页配置激活模型；失败降级规则版字面匹配）
    *
    * 注意：开启后 mockCollectSnapshots 变成异步函数
    */

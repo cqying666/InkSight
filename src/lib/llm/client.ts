@@ -4,20 +4,13 @@ import { logCall } from "@/lib/ai/logs";
 
 /**
  * LLM 服务接入层
- * 默认使用 DeepSeek（OpenAI 兼容接口），通过 openai SDK 直接复用
- * 支持超时、重试、JSON 模式
+ * 通过 openai SDK 复用任何 OpenAI 兼容接口，支持超时、重试、JSON 模式
  *
- * 模型来源优先级：
- *  1. SQLite ai_models 表中 is_active=1 的配置（由 AI 管理页配置）
- *  2. 环境变量 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL（兜底）
+ * 模型来源：SQLite ai_models 表中 is_active=1 的配置（由 AI 管理页配置）
+ * 不再支持环境变量配置——所有模型接入请在网页 AI 管理页操作。
  *
  * 每次 callLLM 调用都会写入 ai_call_logs 表，用于 AI 管理页的调用消耗统计。
- *
- * DeepSeek 文档: https://api-docs.deepseek.com/
  */
-
-const DEFAULT_BASE_URL = "https://api.deepseek.com";
-const DEFAULT_MODEL = "deepseek-chat";
 
 /** 缓存的客户端 + 来源标识，避免每次调用都查库 */
 interface ClientEntry {
@@ -25,8 +18,6 @@ interface ClientEntry {
   baseURL: string;
   apiKey: string;
   model: string;
-  /** 来源：db / env */
-  source: "db" | "env";
   /** 缓存写入时间，用于 TTL 失效检测 */
   cachedAt: number;
 }
@@ -35,14 +26,15 @@ let cached: ClientEntry | null = null;
 const CACHE_TTL_MS = 10_000; // 10 秒内复用，超过则重新查库（允许 UI 切换模型后较快生效）
 
 /**
- * 获取当前生效的 LLM 配置（DB 激活模型优先，env 兜底）
+ * 获取当前生效的 LLM 配置（来自 AI 管理页配置的激活模型）
  * 带 TTL 缓存，避免每次调用都查库
+ *
+ * 未配置激活模型时返回空配置，调用方应提示用户去 AI 管理页添加模型
  */
 export function getActiveLLMConfig(): {
   apiKey: string;
   baseURL: string;
   model: string;
-  source: "db" | "env";
 } {
   const now = Date.now();
   if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
@@ -50,11 +42,9 @@ export function getActiveLLMConfig(): {
       apiKey: cached.apiKey,
       baseURL: cached.baseURL,
       model: cached.model,
-      source: cached.source,
     };
   }
 
-  // 1. 尝试 DB 激活模型
   try {
     const active = getActiveModel();
     if (active && active.apiKey) {
@@ -68,49 +58,30 @@ export function getActiveLLMConfig(): {
         baseURL: active.baseURL,
         apiKey: active.apiKey,
         model: active.model,
-        source: "db",
         cachedAt: now,
       };
       return {
         apiKey: cached.apiKey,
         baseURL: cached.baseURL,
         model: cached.model,
-        source: "db",
       };
     }
   } catch {
-    // DB 未初始化或读取失败，回退 env
+    // DB 未初始化或读取失败
   }
 
-  // 2. 回退环境变量
-  const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
-  const baseURL = process.env.LLM_BASE_URL || DEFAULT_BASE_URL;
-  const model = process.env.LLM_MODEL || DEFAULT_MODEL;
-  cached = {
-    client: apiKey
-      ? new OpenAI({
-          apiKey,
-          baseURL,
-          timeout: 300_000,
-          maxRetries: 0,
-        })
-      : (null as unknown as OpenAI),
-    baseURL,
-    apiKey: apiKey || "",
-    model,
-    source: "env",
-    cachedAt: now,
-  };
-  return { apiKey: apiKey || "", baseURL, model, source: "env" };
+  // 未配置激活模型：返回空配置，调用方据此提示用户
+  cached = null;
+  return { apiKey: "", baseURL: "", model: "" };
 }
 
-function getClient(): OpenAI {
+function getClient(): OpenAI | null {
   const now = Date.now();
   if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
     return cached.client;
   }
   getActiveLLMConfig();
-  return cached!.client;
+  return cached?.client ?? null;
 }
 
 /** 强制刷新配置缓存（AI 管理页切换模型后调用） */
@@ -176,6 +147,10 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
   const openai = getClient();
   const model = getModel();
   const startTime = Date.now();
+
+  if (!openai) {
+    throw new Error("AI 教练未配置，请在 AI 管理页添加并激活一个模型");
+  }
 
   let response;
   let callError: string | null = null;
