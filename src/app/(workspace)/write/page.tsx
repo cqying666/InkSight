@@ -9,11 +9,22 @@ import { NewcomerGuide } from "@/components/write/NewcomerGuide";
 import { StuckDetectionBubble } from "@/components/write/StuckDetectionBubble";
 import { AICoachPanel, createWelcomeMessage } from "@/components/write/AICoachPanel";
 import {
+  GenerationConfirmOverlay,
+  type GenerationType,
+  type GenerationPendingState,
+} from "@/components/write/GenerationConfirmOverlay";
+import {
   EMPTY_WORKSPACE_DOCUMENTS,
   type WorkspaceDocumentKey,
   type WorkspaceDocuments,
 } from "@/lib/write/documents";
-import { loadWorks, updateWorkDocuments, type WorkData } from "@/lib/write/storage";
+import {
+  generateId,
+  loadWorks,
+  updateWorkDocuments,
+  upsertWork,
+  type WorkData,
+} from "@/lib/write/storage";
 import type {
   CoachContext,
   CoachReference,
@@ -127,6 +138,11 @@ export default function WritePage() {
   const [initialWork, setInitialWork] = useState<WorkData | null | undefined>(
     undefined
   );
+  // 生成结果确认浮层（从首页 @技能 跳转过来时展示）
+  const [generationPending, setGenerationPending] =
+    useState<GenerationPendingState | null>(null);
+  // 新建模式下参考文档自动创建作品后，通知 Editor 同步 workIdRef
+  const [externalWorkId, setExternalWorkId] = useState<string | null>(null);
   // AI 教练对话历史（半隔离：每个面板独立维护）
   const [panelMessages, setPanelMessages] = useState<
     Record<PanelKey, ChatMessage[]>
@@ -189,19 +205,45 @@ export default function WritePage() {
           setInitialWork(null);
           setDocuments(EMPTY_WORKSPACE_DOCUMENTS);
           documentsRef.current = EMPTY_WORKSPACE_DOCUMENTS;
-          return;
+        } else {
+          const docs = work.documents ?? EMPTY_WORKSPACE_DOCUMENTS;
+          workIdRef.current = work.id;
+          setInitialWork(work);
+          setDocuments(docs);
+          documentsRef.current = docs;
         }
-        const docs = work.documents ?? EMPTY_WORKSPACE_DOCUMENTS;
-        workIdRef.current = work.id;
-        setInitialWork(work);
-        setDocuments(docs);
-        documentsRef.current = docs;
       } else {
         // 新建模式：对标文/大纲/细纲/人物小传全部为空
         workIdRef.current = null;
         setInitialWork(null);
         setDocuments(EMPTY_WORKSPACE_DOCUMENTS);
         documentsRef.current = EMPTY_WORKSPACE_DOCUMENTS;
+      }
+
+      // 检查是否从首页 @技能 跳转过来（?generating=guide|outline|detail-outline）
+      const genType = params.get("generating") as GenerationType | null;
+      if (genType && (genType === "guide" || genType === "outline" || genType === "detail-outline")) {
+        let pending: GenerationPendingState | null = null;
+        try {
+          const stored = sessionStorage.getItem("inksight:generation-pending");
+          if (stored) {
+            const parsed = JSON.parse(stored) as Partial<GenerationPendingState>;
+            if (parsed.type && parsed.data !== undefined) {
+              pending = {
+                type: parsed.type,
+                data: parsed.data ?? null,
+                createdAt: parsed.createdAt ?? Date.now(),
+              };
+            }
+          }
+        } catch {
+          // ignore
+        }
+        // detail-outline 模式允许 sessionStorage 为空（基于当前作品大纲即时生成）
+        if (!pending && genType === "detail-outline") {
+          pending = { type: "detail-outline", data: null, createdAt: Date.now() };
+        }
+        if (pending) setGenerationPending(pending);
       }
     })();
     loadAllMaterials().then((mats) => {
@@ -355,13 +397,43 @@ export default function WritePage() {
       documentsRef.current = next;
       setDocuments(next);
       // 编辑模式（已有 workId）：debounce 800ms 保存到作品的 documents 字段
-      // 新建模式（无 workId）：仅在内存中保留，等 Editor 首次保存正文生成 id 后再持久化
+      // 新建模式（无 workId）：参考文档有内容时自动创建作品并回填 id
       const workId = workIdRef.current;
       if (workId) {
         if (docSaveTimerRef.current) clearTimeout(docSaveTimerRef.current);
         docSaveTimerRef.current = setTimeout(() => {
           void updateWorkDocuments(workId, next);
         }, 800);
+      } else {
+        // 新建模式：任一参考文档有内容就自动创建作品
+        const hasContent =
+          next.benchmark.trim() ||
+          next.outline.trim() ||
+          next.synopsis.trim() ||
+          next.characters.trim();
+        if (hasContent) {
+          if (docSaveTimerRef.current) clearTimeout(docSaveTimerRef.current);
+          docSaveTimerRef.current = setTimeout(async () => {
+            // 再次检查 workId（可能在此期间已被 Editor 创建）
+            if (workIdRef.current) {
+              void updateWorkDocuments(workIdRef.current, next);
+              return;
+            }
+            // 创建新作品（标题/正文为空，仅保存参考文档）
+            const id = generateId();
+            const work: WorkData = {
+              id,
+              title: "",
+              html: "",
+              plainText: "",
+              savedAt: Date.now(),
+              documents: next,
+            };
+            await upsertWork(work);
+            workIdRef.current = id;
+            setExternalWorkId(id);
+          }, 800);
+        }
       }
       return true;
     },
@@ -554,6 +626,84 @@ export default function WritePage() {
   const handleWorkIdGenerated = useCallback((id: string) => {
     workIdRef.current = id;
   }, []);
+
+  // 清除 URL 中的 ?generating=xxx 参数（保留 ?id 等其他参数）
+  const clearGeneratingParam = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("generating");
+    window.history.replaceState({}, "", url.toString());
+  }, []);
+
+  // 采纳生成结果：写入到对应位置，清除 sessionStorage 和 URL 参数
+  const handleAdoptGeneration = useCallback(
+    (payload: {
+      type: GenerationType;
+      text: string;
+      target: "draft" | "outline" | "synopsis";
+    }) => {
+      const { type, text, target } = payload;
+      if (target === "draft") {
+        // 导语采纳到正文编辑器：切换到 draft 视图，等下一帧编辑器布局更新后插入文本
+        setActiveView("draft");
+        requestAnimationFrame(() => {
+          const editor = document.querySelector(
+            ".write-editor",
+          ) as HTMLDivElement | null;
+          if (!editor) return;
+          editor.focus();
+          const sel = window.getSelection();
+          let inserted = false;
+          if (
+            sel &&
+            sel.rangeCount > 0 &&
+            editor.contains(sel.getRangeAt(0).commonAncestorContainer)
+          ) {
+            inserted = document.execCommand("insertText", false, text);
+          } else {
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+            inserted = document.execCommand("insertText", false, text);
+          }
+          if (inserted) {
+            window.dispatchEvent(new Event("inksight:editor-change"));
+          }
+          trackEvent("coach_text_inserted", {
+            panel: "draft",
+            length: text.length,
+          });
+        });
+      } else {
+        // 大纲/细纲采纳到对应参考面板
+        updateDocument(target, text);
+        setActiveView(target);
+      }
+      // 清理 sessionStorage 和 URL
+      try {
+        sessionStorage.removeItem("inksight:generation-pending");
+      } catch {
+        // ignore
+      }
+      clearGeneratingParam();
+      setGenerationPending(null);
+      trackEvent("generation_adopted", { type, target });
+    },
+    [updateDocument, clearGeneratingParam],
+  );
+
+  // 丢弃生成结果：清除 sessionStorage 和 URL 参数
+  const handleDiscardGeneration = useCallback(() => {
+    try {
+      sessionStorage.removeItem("inksight:generation-pending");
+    } catch {
+      // ignore
+    }
+    clearGeneratingParam();
+    setGenerationPending(null);
+    trackEvent("generation_discarded", {});
+  }, [clearGeneratingParam]);
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-bg">
@@ -834,6 +984,7 @@ export default function WritePage() {
                 initialHtml={initialWork?.html}
                 documentsRef={documentsRef}
                 onWorkIdGenerated={handleWorkIdGenerated}
+                externalWorkId={externalWorkId}
               />
             )}
             {/* A6：新手引导浮层 */}
@@ -958,6 +1109,17 @@ export default function WritePage() {
           messages={panelMessages[activeView] ?? [createWelcomeMessage(activeView)]}
           onMessagesChange={handleMessagesChange}
           onInsertText={handleInsertText}
+        />
+      )}
+
+      {/* ===== 生成结果确认浮层（从首页 @技能 跳转过来） ===== */}
+      {generationPending && mounted && (
+        <GenerationConfirmOverlay
+          type={generationPending.type}
+          data={generationPending.data}
+          currentOutlineText={documents.outline}
+          onAdopt={handleAdoptGeneration}
+          onDiscard={handleDiscardGeneration}
         />
       )}
     </main>

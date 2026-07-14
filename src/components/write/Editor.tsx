@@ -70,6 +70,8 @@ interface Props {
   documentsRef?: React.MutableRefObject<WorkspaceDocuments>;
   /** 新建模式下首次保存生成作品 id 后回调，供父组件切换为编辑模式保存参考文档 */
   onWorkIdGenerated?: (id: string) => void;
+  /** 外部（参考文档）自动创建作品后回填的 id，同步到 Editor 内部 workIdRef */
+  externalWorkId?: string | null;
 }
 
 const FONT_SCALE_KEY = "inksight:write:font-scale";
@@ -85,6 +87,7 @@ export function Editor({
   initialHtml,
   documentsRef,
   onWorkIdGenerated,
+  externalWorkId,
 }: Props) {
   const titleRef = useRef<HTMLInputElement>(null);
   const wordCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,6 +129,14 @@ export function Editor({
   useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
+
+  // 外部（参考文档）自动创建作品后回填的 id，同步到 Editor 内部 workIdRef
+  // 避免后续 Editor 保存正文时重复创建新作品
+  useEffect(() => {
+    if (externalWorkId && !workIdRef.current) {
+      workIdRef.current = externalWorkId;
+    }
+  }, [externalWorkId]);
 
   // ===== Tiptap 编辑器创建 =====
   const editor = useEditor({
