@@ -6,6 +6,7 @@ import {
   buildIndex,
   search,
   upsertMaterial,
+  removeMaterial,
   setTags as storageSetTags,
   setNotes as storageSetNotes,
   setFolder as storageSetFolder,
@@ -53,13 +54,26 @@ type MenuKey =
   | "inspiration"
   | "trend";
 
-/** 左侧一级菜单（按用户指定顺序） */
-const MENU_ITEMS: { key: MenuKey; label: string }[] = [
+/**
+ * 左侧菜单结构
+ * 一级：例文 / 拆文汇总 / 灵感 / 热门元素
+ * 二级（拆文汇总下）：人设 / 剧情 / 情绪描写语录
+ */
+type MenuItem =
+  | { key: MenuKey; label: string }
+  | { key: MenuKey; label: string; children: { key: MenuKey; label: string }[] };
+
+const MENU_ITEMS: MenuItem[] = [
   { key: "examples", label: "例文" },
-  { key: "teardown_summary", label: "拆文汇总" },
-  { key: "character", label: "人设" },
-  { key: "plot", label: "剧情" },
-  { key: "emotion", label: "情绪描写语录" },
+  {
+    key: "teardown_summary",
+    label: "拆文汇总",
+    children: [
+      { key: "character", label: "人设" },
+      { key: "plot", label: "剧情" },
+      { key: "emotion", label: "情绪描写语录" },
+    ],
+  },
   { key: "inspiration", label: "灵感" },
   { key: "trend", label: "热门元素" },
 ];
@@ -96,6 +110,8 @@ export default function MaterialPage() {
   const [examplesError, setExamplesError] = useState(false);
   const [query, setQuery] = useState("");
   const [activeMenu, setActiveMenu] = useState<MenuKey>("examples");
+  /** 拆文汇总一级目录的展开状态（默认展开，方便看到二级） */
+  const [teardownExpanded, setTeardownExpanded] = useState(true);
   const [folders, setFolders] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   // 触发重新加载用户素材的信号（编辑后递增）
@@ -252,6 +268,23 @@ export default function MaterialPage() {
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
+  // 删除素材
+  const handleDeleteMaterial = useCallback(async (material: Material) => {
+    if (!confirm("确定删除此素材吗？此操作不可恢复。")) return;
+    await removeMaterial(material.id);
+    setMaterials((prev) => {
+      const next = prev.filter((m) => m.id !== material.id);
+      setFolders(listFolders(next));
+      return next;
+    });
+    trackEvent("material_deleted", {
+      material_id: material.id,
+      source: material.source,
+      material_type: material.layer,
+    });
+    reloadUserMaterials();
+  }, [reloadUserMaterials]);
+
   const handleCreateMaterial = useCallback(
     async (material: Material, category: MaterialCategory) => {
       const persisted = await upsertMaterial(material);
@@ -318,25 +351,82 @@ export default function MaterialPage() {
         </header>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
-          {/* 左侧一级菜单 */}
+          {/* 左侧菜单（一级 + 拆文汇总下的二级） */}
           <aside className="space-y-4">
-            <nav className="space-y-1 rounded-2xl border border-text/[0.05] bg-surface p-3 shadow-card">
-              {MENU_ITEMS.map((item) => (
-                <button
-                  key={item.key}
-                  onClick={() => {
-                    setActiveMenu(item.key);
-                    setQuery("");
-                  }}
-                  className={`block w-full rounded-lg px-3 py-2 text-left font-serif text-sm transition-colors ${
-                    activeMenu === item.key
-                      ? "bg-accent/[0.06] text-text font-medium"
-                      : "text-text/70 hover:bg-bg/60 hover:text-text"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+            <nav className="space-y-0.5 rounded-2xl border border-text/[0.05] bg-surface p-3 shadow-card">
+              {MENU_ITEMS.map((item) => {
+                if ("children" in item) {
+                  const isParentActive =
+                    activeMenu === item.key ||
+                    item.children.some((c) => c.key === activeMenu);
+                  return (
+                    <div key={item.key}>
+                      <button
+                        onClick={() => {
+                          // 点击一级：切换展开/收起；若当前二级已选中，则保持展开
+                          setTeardownExpanded((v) => !v);
+                          // 若点的是一级本身（如展示汇总全量），切换到一级
+                          if (activeMenu !== item.key && !item.children.some((c) => c.key === activeMenu)) {
+                            setActiveMenu(item.key);
+                            setQuery("");
+                          }
+                        }}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-serif text-sm transition-colors ${
+                          isParentActive
+                            ? "text-text font-medium"
+                            : "text-text/70 hover:bg-bg/60 hover:text-text"
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        <span
+                          className={`text-text-muted transition-transform duration-150 ${
+                            teardownExpanded ? "rotate-90" : ""
+                          }`}
+                          aria-hidden
+                        >
+                          ›
+                        </span>
+                      </button>
+                      {teardownExpanded && (
+                        <div className="mt-0.5 ml-3 space-y-0.5 border-l border-text/[0.06] pl-2">
+                          {item.children.map((child) => (
+                            <button
+                              key={child.key}
+                              onClick={() => {
+                                setActiveMenu(child.key);
+                                setQuery("");
+                              }}
+                              className={`block w-full rounded-md px-3 py-1.5 text-left font-serif text-[13px] transition-colors ${
+                                activeMenu === child.key
+                                  ? "bg-accent/[0.06] text-text font-medium"
+                                  : "text-text/65 hover:bg-bg/60 hover:text-text"
+                              }`}
+                            >
+                              {child.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => {
+                      setActiveMenu(item.key);
+                      setQuery("");
+                    }}
+                    className={`block w-full rounded-lg px-3 py-2 text-left font-serif text-sm transition-colors ${
+                      activeMenu === item.key
+                        ? "bg-accent/[0.06] text-text font-medium"
+                        : "text-text/70 hover:bg-bg/60 hover:text-text"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </nav>
 
             <section className="rounded-2xl border border-text/[0.05] bg-surface p-4 shadow-card">
@@ -443,6 +533,7 @@ export default function MaterialPage() {
                     onSetTags={handleSetTags}
                     onSetNotes={handleSetNotes}
                     onSetFolder={handleSetFolder}
+                    onDelete={handleDeleteMaterial}
                     highlighted={createdId === m.id}
                   />
                 ))
@@ -519,16 +610,12 @@ function ExampleCard({ example }: { example: ExampleSummary }) {
       </div>
 
       <div className="mt-4 rounded-xl bg-bg/70 p-4">
-        <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-text-muted">导语前三句话</p>
         {example.introSentences.length > 0 ? (
-          <ol className="space-y-1.5 font-serif text-sm leading-relaxed text-text/85">
+          <div className="space-y-1.5 font-serif text-sm leading-relaxed text-text/85">
             {example.introSentences.map((sentence, index) => (
-              <li key={`${example.id}-${index}`} className="flex gap-2">
-                <span className="font-mono text-[10px] text-text-muted">{String(index + 1).padStart(2, "0")}</span>
-                <span>{sentence}</span>
-              </li>
+              <p key={`${example.id}-${index}`}>{sentence}</p>
             ))}
-          </ol>
+          </div>
         ) : (
           <p className="text-sm text-text-muted">原文暂无可展示导语。</p>
         )}
@@ -553,6 +640,7 @@ interface MaterialCardProps {
   onSetTags: (m: Material, tags: string[]) => void;
   onSetNotes: (m: Material, notes: string) => void;
   onSetFolder: (m: Material, folder: string | undefined) => void;
+  onDelete: (m: Material) => void;
   highlighted?: boolean;
 }
 
@@ -563,6 +651,7 @@ function MaterialCard({
   onSetTags,
   onSetNotes,
   onSetFolder,
+  onDelete,
   highlighted = false,
 }: MaterialCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -672,6 +761,27 @@ function MaterialCard({
             className="text-xs text-accent underline underline-offset-2 hover:text-accent/80"
           >
             {expanded ? "收起" : "详情"}
+          </button>
+          {/* 删除按钮（图标式） */}
+          <button
+            onClick={() => onDelete(m)}
+            title="删除素材"
+            aria-label="删除素材"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted/60 transition-colors hover:bg-[#9C4B3C]/[0.08] hover:text-[#9C4B3C]"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6" />
+              <path d="M10 11v6M14 11v6" />
+            </svg>
           </button>
         </div>
       </div>
