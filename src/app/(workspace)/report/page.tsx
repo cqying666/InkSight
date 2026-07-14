@@ -273,7 +273,7 @@ export default function ReportPage() {
           <div className="rounded-md border border-border bg-surface p-5">
             <h2 className="font-display text-xl font-bold text-text">下一步行动</h2>
             <p className="mt-1 text-xs text-text-muted">基于这份拆解，继续精进你的创作</p>
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={handleTeardownAnother}
@@ -289,14 +289,6 @@ export default function ReportPage() {
               >
                 <div className="font-display text-sm font-semibold text-text">开始创作</div>
                 <p className="mt-1 text-xs text-text-muted">带着这份拆解，动手写一篇</p>
-                <span className="mt-2 block text-xs text-primary">→</span>
-              </Link>
-              <Link
-                href="/compare"
-                className="rounded-md border border-border bg-bg p-4 transition-colors hover:border-primary hover:bg-primary/5"
-              >
-                <div className="font-display text-sm font-semibold text-text">双篇对比</div>
-                <p className="mt-1 text-xs text-text-muted">对比两份拆解找差异</p>
                 <span className="mt-2 block text-xs text-primary">→</span>
               </Link>
             </div>

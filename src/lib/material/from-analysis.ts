@@ -108,18 +108,24 @@ export function buildAnalysisMaterialCandidates(
     });
   });
 
-  character?.reusableCards.forEach((card, index) => {
+  character?.biographies.forEach((bio, index) => {
     const id = `analysis-${safeId(reportId)}-character-${index}`;
+    const identity = bio.identity || bio.role || "";
     candidates.push({
       id,
       category: "character",
       categoryLabel: CATEGORY_LABEL.character,
       material: buildComponentMaterial({
         id,
-        title: `${card.cardName}：${card.oneLineCharacter}`,
+        title: `${bio.name}（${identity}）`,
         kind: "character_arc",
-        details: { ...card },
-        tags: ["人设", ...card.suitableGenres.slice(0, 3)],
+        details: {
+          人物: bio.name,
+          身份: identity,
+          性格: bio.personality,
+          面临事情时的态度: bio.attitude,
+        },
+        tags: ["人设", bio.name, identity].filter(Boolean),
         reportId,
         sourceTitle,
       }),

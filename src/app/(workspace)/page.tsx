@@ -19,7 +19,6 @@ import { createExample, stripFileExtension, upsertExample } from "@/lib/example"
 
 const SCENE_CARDS = [
   { href: "/report", title: "初稿诊断", desc: "让 Coach 给你的开头、钩子、节奏打分", icon: "🔍" },
-  { href: "/compare", title: "对比改稿", desc: "把你的作品与参考作品放在一起对照", icon: "⚖️" },
   { href: "/trend", title: "灵感雷达", desc: "看看最近哪些题材和元素正在升温", icon: "📈" },
   { href: "/material", title: "素材整理", desc: "收藏、标注、调用你的创作素材", icon: "📚" },
   { href: "/write", title: "进入创作", desc: "打开工作台，边写边查", icon: "✍️" },

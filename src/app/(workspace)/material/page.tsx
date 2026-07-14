@@ -23,7 +23,7 @@ import { trackEvent } from "@/lib/report/analytics";
 import { degradeMaterialSearch } from "@/lib/trend";
 import { CreateMaterialDialog } from "@/components/material/CreateMaterialDialog";
 import { UploadExampleDialog } from "@/components/material/UploadExampleDialog";
-import { listExamples, type ExampleSummary } from "@/lib/example";
+import { deleteExample, listExamples, type ExampleSummary } from "@/lib/example";
 
 /**
  * P4-T13 + P4-T14 素材库前端
@@ -267,6 +267,19 @@ export default function MaterialPage() {
     }
     reloadUserMaterials();
   }, [reloadUserMaterials]);
+
+  // 删除例文
+  const handleDeleteExample = useCallback(async (example: ExampleSummary) => {
+    if (!confirm("确定删除此例文吗？此操作不可恢复。")) return;
+    const ok = await deleteExample(example.id);
+    if (!ok) return;
+    setExamples((prev) => prev.filter((e) => e.id !== example.id));
+    trackEvent("material_deleted", {
+      material_id: example.id,
+      source: "example",
+      material_type: "example",
+    });
+  }, []);
 
   // 删除素材
   const handleDeleteMaterial = useCallback(async (material: Material) => {
@@ -513,7 +526,13 @@ export default function MaterialPage() {
                     )}
                   </div>
                 ) : (
-                  exampleResults.map((example) => <ExampleCard key={example.id} example={example} />)
+                  exampleResults.map((example) => (
+                    <ExampleCard
+                      key={example.id}
+                      example={example}
+                      onDelete={() => handleDeleteExample(example)}
+                    />
+                  ))
                 )
               ) : searchResults.length === 0 ? (
                 <div className="rounded-2xl border border-text/[0.05] bg-surface p-8 text-center shadow-card">
@@ -535,6 +554,7 @@ export default function MaterialPage() {
                     onSetFolder={handleSetFolder}
                     onDelete={handleDeleteMaterial}
                     highlighted={createdId === m.id}
+                    hideLayerKindBadges={activeMenu === "character"}
                   />
                 ))
               )}
@@ -585,50 +605,77 @@ export default function MaterialPage() {
   );
 }
 
-function ExampleCard({ example }: { example: ExampleSummary }) {
+function ExampleCard({
+  example,
+  onDelete,
+}: {
+  example: ExampleSummary;
+  onDelete: () => void;
+}) {
   const href =
     example.status === "analyzed"
       ? `/report?exampleId=${encodeURIComponent(example.id)}&tab=original`
       : `/example/${encodeURIComponent(example.id)}`;
 
   return (
-    <Link
-      href={href}
-      className="group block rounded-2xl border border-text/[0.05] bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-accent/25 hover:shadow-float"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="rounded-full bg-accent/[0.07] px-2.5 py-1 text-accent">{example.genre || "待分类"}</span>
-            <span className={example.status === "analyzed" ? "text-primary" : "text-text-muted"}>
-              {example.status === "analyzed" ? "已拆文" : "仅原文"}
-            </span>
+    <div className="group relative rounded-2xl border border-text/[0.05] bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-accent/25 hover:shadow-float">
+      {/* 删除按钮（右上角，hover 显形） */}
+      <button
+        onClick={onDelete}
+        title="删除例文"
+        aria-label="删除例文"
+        className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-text-muted/0 transition-colors group-hover:text-text-muted/60 hover:!bg-[#9C4B3C]/[0.08] hover:!text-[#9C4B3C]"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-4 w-4"
+          aria-hidden="true"
+        >
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6" />
+          <path d="M10 11v6M14 11v6" />
+        </svg>
+      </button>
+
+      <Link href={href} className="block">
+        <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="rounded-full bg-accent/[0.07] px-2.5 py-1 text-accent">{example.genre || "待分类"}</span>
+              <span className={example.status === "analyzed" ? "text-primary" : "text-text-muted"}>
+                {example.status === "analyzed" ? "已拆文" : "仅原文"}
+              </span>
+            </div>
+            <h2 className="mt-3 font-serif text-xl font-semibold text-text group-hover:text-primary">《{example.title}》</h2>
           </div>
-          <h2 className="mt-3 font-serif text-xl font-semibold text-text group-hover:text-primary">《{example.title}》</h2>
+          <span className="text-xs text-accent">{example.status === "analyzed" ? "查看 X 光原文 →" : "查看原文 →"}</span>
         </div>
-        <span className="text-xs text-accent">{example.status === "analyzed" ? "查看 X 光原文 →" : "查看原文 →"}</span>
-      </div>
 
-      <div className="mt-4 rounded-xl bg-bg/70 p-4">
-        {example.introSentences.length > 0 ? (
-          <div className="space-y-1.5 font-serif text-sm leading-relaxed text-text/85">
-            {example.introSentences.map((sentence, index) => (
-              <p key={`${example.id}-${index}`}>{sentence}</p>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted">原文暂无可展示导语。</p>
-        )}
-      </div>
+        <div className="mt-4 rounded-xl bg-bg/70 p-4">
+          {example.introSentences.length > 0 ? (
+            <div className="space-y-1.5 font-serif text-sm leading-relaxed text-text/85">
+              {example.introSentences.map((sentence, index) => (
+                <p key={`${example.id}-${index}`}>{sentence}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted">原文暂无可展示导语。</p>
+          )}
+        </div>
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {example.tags.length > 0 ? example.tags.map((tag) => (
-          <span key={tag} className="rounded-md border border-text/[0.08] bg-bg px-2 py-0.5 text-[11px] text-text-muted">#{tag}</span>
-        )) : (
-          <span className="text-[11px] text-text-muted">暂无标签</span>
-        )}
-      </div>
-    </Link>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {example.tags.length > 0 ? example.tags.map((tag) => (
+            <span key={tag} className="rounded-md border border-text/[0.08] bg-bg px-2 py-0.5 text-[11px] text-text-muted">#{tag}</span>
+          )) : (
+            <span className="text-[11px] text-text-muted">暂无标签</span>
+          )}
+        </div>
+      </Link>
+    </div>
   );
 }
 
@@ -642,6 +689,8 @@ interface MaterialCardProps {
   onSetFolder: (m: Material, folder: string | undefined) => void;
   onDelete: (m: Material) => void;
   highlighted?: boolean;
+  /** 隐藏「组件素材」层标签和组件子类型标签（在同质列表中冗余时使用） */
+  hideLayerKindBadges?: boolean;
 }
 
 function MaterialCard({
@@ -653,6 +702,7 @@ function MaterialCard({
   onSetFolder,
   onDelete,
   highlighted = false,
+  hideLayerKindBadges = false,
 }: MaterialCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -723,10 +773,12 @@ function MaterialCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-md border border-text/[0.08] bg-bg px-2 py-0.5 text-text-muted">
-              {LAYER_LABEL[m.layer]}
-            </span>
-            {m.component && (
+            {!hideLayerKindBadges && (
+              <span className="rounded-md border border-text/[0.08] bg-bg px-2 py-0.5 text-text-muted">
+                {LAYER_LABEL[m.layer]}
+              </span>
+            )}
+            {!hideLayerKindBadges && m.component && (
               <span className="rounded-md border border-accent/20 bg-accent/[0.06] px-2 py-0.5 text-accent">
                 {COMPONENT_KIND_LABEL[m.component.kind]}
               </span>

@@ -66,3 +66,16 @@ export async function POST(request: NextRequest) {
   ).run(normalized.id, data, normalized.updatedAt);
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(request: NextRequest) {
+  const id = request.nextUrl.searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "缺少例文 id" }, { status: 400 });
+  }
+  const db = getDb();
+  const result = db.prepare("DELETE FROM examples WHERE id = ?").run(id);
+  if (result.changes === 0) {
+    return NextResponse.json({ error: "例文不存在" }, { status: 404 });
+  }
+  return NextResponse.json({ success: true });
+}

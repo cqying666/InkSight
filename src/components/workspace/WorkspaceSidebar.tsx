@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   HomeIcon,
   ReportIcon,
-  CompareIcon,
   TrendIcon,
   MaterialIcon,
   WorksIcon,
@@ -41,7 +40,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: "分析",
     items: [
       { href: "/report", label: "X 光报告", Icon: ReportIcon },
-      { href: "/compare", label: "双篇对比", Icon: CompareIcon },
     ],
   },
   {

@@ -417,6 +417,9 @@ export const CharacterAnalysisSchema = z.object({
     z.object({
       name: str,
       role: str,
+      identity: str,
+      personality: str,
+      attitude: str,
       biography: str,
     })
   ),

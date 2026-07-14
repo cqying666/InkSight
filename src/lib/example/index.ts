@@ -132,3 +132,16 @@ export async function upsertExample(example: ExampleWork): Promise<boolean> {
     return false;
   }
 }
+
+/** 删除例文（按 id） */
+export async function deleteExample(id: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `/api/examples?id=${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
