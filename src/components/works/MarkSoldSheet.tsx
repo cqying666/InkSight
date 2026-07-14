@@ -41,9 +41,11 @@ function toDateInput(ts: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** 把 date input 的 yyyy-mm-dd 转成当天 00:00 的 timestamp */
+/** 把 date input 的 yyyy-mm-dd 转成当天 00:00 的 timestamp；无效输入回退到当前时间 */
 function fromDateInput(value: string): number {
+  if (!value) return Date.now();
   const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d) return Date.now();
   return new Date(y, m - 1, d).getTime();
 }
 
