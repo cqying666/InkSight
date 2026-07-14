@@ -4,7 +4,7 @@ import {
   createModel,
   updateModel,
   deleteModel,
-  setActiveModel,
+  setModelActive,
   maskApiKey,
   type AIModelConfig,
 } from "@/lib/ai/models";
@@ -15,7 +15,7 @@ import {
  * GET    /api/ai-models            — 列出全部模型（apiKey 脱敏）
  * POST   /api/ai-models            — 新建模型
  * PUT    /api/ai-models?id=xxx     — 更新模型
- * PUT    /api/ai-models?id=xxx&action=activate — 设为激活
+ * PUT    /api/ai-models?id=xxx&action=activate&value=true|false — 启用/禁用
  * DELETE /api/ai-models?id=xxx     — 删除模型
  */
 
@@ -65,7 +65,10 @@ export async function PUT(request: NextRequest) {
   const action = request.nextUrl.searchParams.get("action");
 
   if (action === "activate") {
-    const ok = setActiveModel(id);
+    // value=true 启用 / value=false 禁用，不影响其他模型
+    const value = request.nextUrl.searchParams.get("value");
+    const active = value !== "false";
+    const ok = setModelActive(id, active);
     if (!ok) return NextResponse.json({ error: "模型不存在" }, { status: 404 });
     return NextResponse.json({ success: true });
   }

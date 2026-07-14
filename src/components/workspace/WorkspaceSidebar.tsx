@@ -12,7 +12,6 @@ import {
   AIControlIcon,
   CollapseIcon,
   ExpandIcon,
-  DrawerIcon,
 } from "./icons";
 
 type NavItem = {
@@ -67,14 +66,12 @@ function isActive(pathname: string, href: string) {
 type SidebarProps = {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  onOpenDrawer: () => void;
   onNavigate?: () => void;
 };
 
 export function WorkspaceSidebar({
   collapsed,
   onToggleCollapse,
-  onOpenDrawer,
   onNavigate,
 }: SidebarProps) {
   const pathname = usePathname();
@@ -154,27 +151,6 @@ export function WorkspaceSidebar({
             </ul>
           </div>
         ))}
-      </div>
-
-      {/* 底部：伴随面板入口 */}
-      <div className="border-t border-text/[0.04] px-3 py-3">
-        <button
-          type="button"
-          onClick={onOpenDrawer}
-          aria-label="打开伴随面板（素材 / 趋势）"
-          title={collapsed ? "伴随面板（素材 / 趋势）" : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-text/70 transition-all hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-1 ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          <DrawerIcon className="h-[18px] w-[18px] shrink-0 text-text-muted" />
-          {!collapsed && (
-            <span className="min-w-0">
-              <span className="block truncate">伴随面板</span>
-              <span className="block text-[10px] text-text-muted/70">素材 · 趋势</span>
-            </span>
-          )}
-        </button>
       </div>
     </nav>
   );

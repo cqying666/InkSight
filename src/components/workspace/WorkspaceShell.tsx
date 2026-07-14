@@ -3,15 +3,12 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
-import { AccompanyDrawer } from "./AccompanyDrawer";
-import { DrawerIcon } from "./icons";
 
 const NAV_KEY = "inksight:nav-collapsed";
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
 
@@ -123,7 +120,6 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <WorkspaceSidebar
             collapsed={collapsed}
             onToggleCollapse={toggleCollapse}
-            onOpenDrawer={() => setDrawerOpen(true)}
           />
         </div>
       </div>
@@ -154,10 +150,6 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <WorkspaceSidebar
             collapsed={false}
             onToggleCollapse={() => setMobileNavOpen(false)}
-            onOpenDrawer={() => {
-              setMobileNavOpen(false);
-              setDrawerOpen(true);
-            }}
             onNavigate={() => setMobileNavOpen(false)}
           />
         </div>
@@ -194,22 +186,12 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
               InkSight
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="打开伴随面板"
-            className="ml-auto rounded-sm p-1.5 text-text-muted transition-colors hover:bg-text/[0.05] hover:text-text"
-          >
-            <DrawerIcon className="h-5 w-5" />
-          </button>
         </header>
 
         <div id="workspace-content" className="min-w-0 flex-1">
           {children}
         </div>
       </div>
-
-      <AccompanyDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

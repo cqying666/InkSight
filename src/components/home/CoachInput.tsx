@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { parseFile, SUPPORTED_FORMAT_HINT } from "@/lib/report/file-parser";
 
 export type UploadedFile = {
@@ -11,9 +11,37 @@ export type UploadedFile = {
   format: string;
 };
 
+/** 从 AI 管理拉取的模型项 */
+type ModelOption = {
+  id: string;
+  name: string;
+  isActive: boolean;
+};
+
+const MODEL_STORAGE_KEY = "inksight:coach:model";
+
+/** @ 引用的技能项 */
+export type SkillRef = {
+  id: string;
+  label: string;
+};
+
+/** 可选技能列表（@ 引用） */
+export const SKILL_OPTIONS: SkillRef[] = [
+  { id: "teardown", label: "拆文" },
+  { id: "guide", label: "写导语" },
+  { id: "outline", label: "大纲生成" },
+  { id: "detail-outline", label: "细纲生成" },
+];
+
 export type CoachInputProps = {
   placeholder?: string;
-  onSubmit?: (text: string, files?: UploadedFile[]) => void;
+  onSubmit?: (
+    text: string,
+    files?: UploadedFile[],
+    model?: string,
+    skills?: SkillRef[]
+  ) => void;
   quickTags?: { label: string; onClick: () => void }[];
   compact?: boolean;
 };
@@ -52,14 +80,112 @@ export function CoachInput({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [model, setModel] = useState<string>("");
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [skills, setSkills] = useState<SkillRef[]>([]);
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const skillMenuRef = useRef<HTMLDivElement>(null);
+
+  // 从 AI 管理拉取模型列表，并恢复用户选择
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/ai-models");
+        if (!res.ok) return;
+        const data: Array<{
+          id: string;
+          name: string;
+          isActive: boolean;
+        }> = await res.json();
+        if (cancelled) return;
+        const opts = data.map((m) => ({
+          id: m.id,
+          name: m.name,
+          isActive: !!m.isActive,
+        }));
+        setModels(opts);
+        // 恢复选择：localStorage 优先 → 激活模型 → 第一个
+        let stored: string | null = null;
+        try {
+          stored = localStorage.getItem(MODEL_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+        const exists = (id: string | null) =>
+          !!id && opts.some((m) => m.id === id);
+        if (exists(stored)) {
+          setModel(stored as string);
+        } else {
+          const active = opts.find((m) => m.isActive);
+          setModel(active?.id ?? opts[0]?.id ?? "");
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 点击外部关闭模型菜单
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [modelMenuOpen]);
+
+  // 点击外部关闭技能菜单
+  useEffect(() => {
+    if (!skillMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (skillMenuRef.current && !skillMenuRef.current.contains(e.target as Node)) {
+        setSkillMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [skillMenuOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed && files.length === 0) return;
-    onSubmit?.(trimmed, files);
+    if (!trimmed && files.length === 0 && skills.length === 0) return;
+    onSubmit?.(trimmed, files, model, skills);
   };
+
+  const handleModelSelect = (id: string) => {
+    setModel(id);
+    setModelMenuOpen(false);
+    try {
+      localStorage.setItem(MODEL_STORAGE_KEY, id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSkillSelect = (skill: SkillRef) => {
+    setSkills((prev) =>
+      prev.some((s) => s.id === skill.id) ? prev : [...prev, skill]
+    );
+    setSkillMenuOpen(false);
+  };
+
+  const removeSkill = (id: string) => {
+    setSkills((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const currentModel = models.find((m) => m.id === model);
+  const currentModelLabel = currentModel?.name ?? "未配置";
 
   const parseAndAddFiles = async (fileList: File[]) => {
     setParseError(null);
@@ -192,7 +318,9 @@ export function CoachInput({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          className="relative"
+          className={`relative rounded-2xl border bg-surface transition-all focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/10 ${
+            dragOver ? "border-accent ring-2 ring-accent/20" : "border-text/[0.10]"
+          }`}
         >
           <input
             ref={fileInputRef}
@@ -202,16 +330,58 @@ export function CoachInput({
             onChange={handleFileSelect}
             className="hidden"
           />
+
+          {/* 已选技能卡片（输入框内顶部独立行，与文字流分离，不遮挡） */}
+          {skills.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 border-b border-text/[0.06] px-3 py-2">
+              {skills.map((skill) => (
+                <div
+                  key={skill.id}
+                  className="flex items-center gap-1 rounded-md border border-accent/30 bg-bg px-2 py-1 text-[11px] text-accent shadow-sm"
+                >
+                  <span className="font-mono text-[9px] text-accent/60">@</span>
+                  <span className="font-serif font-medium">{skill.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeSkill(skill.id)}
+                    aria-label={`取消 ${skill.label}`}
+                    className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-accent transition-all hover:bg-accent hover:text-text-inverse"
+                  >
+                    <svg
+                      width="9"
+                      height="9"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M2 2l8 8M10 2l-8 8" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter 发送，Shift+Enter 换行
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                const trimmed = text.trim();
+                if (trimmed || files.length > 0 || skills.length > 0) {
+                  onSubmit?.(trimmed, files, model, skills);
+                  setText("");
+                }
+              }
+            }}
             placeholder={placeholder}
             rows={10}
-            className={`w-full resize-none rounded-2xl border bg-surface pb-14 pl-4 pr-14 pt-4 text-base leading-relaxed text-text placeholder:text-text-muted/50 outline-none transition-all focus:border-accent/40 focus:ring-2 focus:ring-accent/10 ${
-              dragOver
-                ? "border-accent ring-2 ring-accent/20"
-                : "border-text/[0.10]"
-            }`}
+            className="w-full resize-none rounded-2xl bg-transparent pb-14 pl-4 pr-32 pt-4 text-base leading-relaxed text-text placeholder:text-text-muted/50 outline-none"
           />
 
           {/* 左下角：上传图标 */}
@@ -242,12 +412,134 @@ export function CoachInput({
             )}
           </button>
 
-          {/* 右下角：发送图标 */}
+          {/* 左下角：@ 技能引用按钮 */}
+          <div ref={skillMenuRef} className="absolute bottom-3 left-12">
+            <button
+              type="button"
+              onClick={() => setSkillMenuOpen((v) => !v)}
+              aria-label="引用技能"
+              aria-expanded={skillMenuOpen}
+              title="引用技能"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-all hover:bg-text/5 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+              </svg>
+            </button>
+            {skillMenuOpen && (
+              <div className="absolute bottom-10 left-0 z-20 min-w-[160px] overflow-hidden rounded-lg border border-text/[0.08] bg-surface py-1 shadow-card">
+                {SKILL_OPTIONS.map((skill) => {
+                  const selected = skills.some((s) => s.id === skill.id);
+                  return (
+                    <button
+                      key={skill.id}
+                      type="button"
+                      onClick={() => handleSkillSelect(skill)}
+                      className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors hover:bg-bg/60 ${
+                        selected
+                          ? "cursor-not-allowed text-text-muted/40"
+                          : "text-text"
+                      }`}
+                      disabled={selected}
+                    >
+                      <span className="font-serif">{skill.label}</span>
+                      {selected && (
+                        <span className="font-mono text-[10px] text-text-muted/40">
+                          已添加
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 右下角：模型选择 + 发送图标 */}
+          {/* 模型选择下拉（数据来自 AI 管理）*/}
+          <div ref={modelMenuRef} className="absolute bottom-3 right-14">
+            <button
+              type="button"
+              onClick={() => setModelMenuOpen((v) => !v)}
+              aria-label="选择模型"
+              aria-expanded={modelMenuOpen}
+              className="flex h-8 items-center gap-1 rounded-full border border-text/[0.08] bg-bg/60 px-2.5 text-[11px] font-medium text-text/70 transition-all hover:border-accent/30 hover:bg-bg hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+            >
+              <span className="font-mono">{currentModelLabel}</span>
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${modelMenuOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              >
+                <path d="m3 4.5 3 3 3-3" />
+              </svg>
+            </button>
+            {modelMenuOpen && (
+              <div className="absolute bottom-10 right-0 z-20 min-w-[180px] overflow-hidden rounded-lg border border-text/[0.08] bg-surface py-1 shadow-card">
+                {models.length === 0 ? (
+                  <div className="px-3 py-2 text-center font-serif text-[11px] text-text-muted/60">
+                    请先在「AI 管理」中添加模型
+                  </div>
+                ) : (
+                  models.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      disabled={!m.isActive}
+                      onClick={() => handleModelSelect(m.id)}
+                      className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors ${
+                        m.isActive
+                          ? "text-text hover:bg-bg/60"
+                          : "cursor-not-allowed text-text-muted/40"
+                      }`}
+                    >
+                      <span className="font-mono">{m.name}</span>
+                      {m.id === model && m.isActive && (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="m2.5 6 2.5 2.5 4.5-5" />
+                        </svg>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 发送按钮 */}
           <button
             type="submit"
             aria-label="发送"
             className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-text-inverse transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:bg-text/20 disabled:text-text-muted/50"
-            disabled={!text.trim() && files.length === 0}
+            disabled={!text.trim() && files.length === 0 && skills.length === 0}
           >
             <svg
               width="18"
@@ -280,7 +572,9 @@ export function CoachInput({
         {/* 字数统计 */}
         <div className="mt-1.5 flex justify-end">
           <span className="text-xs text-text-muted">
-            {text.length} 字{files.length > 0 && ` · ${files.length} 个文件`}
+            {text.length} 字
+            {files.length > 0 && ` · ${files.length} 个文件`}
+            {skills.length > 0 && ` · ${skills.length} 个技能`}
           </span>
         </div>
       </form>

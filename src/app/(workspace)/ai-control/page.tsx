@@ -172,10 +172,11 @@ export default function AIControlPage() {
     setSheetOpen(true);
   };
 
-  const handleActivate = async (m: AIModelConfig) => {
+  const handleToggleActive = async (m: AIModelConfig) => {
     try {
+      const nextActive = !m.isActive;
       const res = await fetch(
-        `/api/ai-models?id=${encodeURIComponent(m.id)}&action=activate`,
+        `/api/ai-models?id=${encodeURIComponent(m.id)}&action=activate&value=${nextActive ? "true" : "false"}`,
         { method: "PUT" }
       );
       if (res.ok) {
@@ -304,7 +305,7 @@ export default function AIControlPage() {
                   key={m.id}
                   model={m}
                   onEdit={() => handleEdit(m)}
-                  onActivate={() => handleActivate(m)}
+                  onToggleActive={() => handleToggleActive(m)}
                   onDelete={() => handleDelete(m)}
                 />
               ))}
@@ -465,12 +466,12 @@ function StatCard({
 function ModelCard({
   model,
   onEdit,
-  onActivate,
+  onToggleActive,
   onDelete,
 }: {
   model: AIModelConfig;
   onEdit: () => void;
-  onActivate: () => void;
+  onToggleActive: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -484,7 +485,7 @@ function ModelCard({
             {model.isActive ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-accent/[0.12] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-accent">
                 <span className="inline-block h-1 w-1 rounded-full bg-accent" />
-                使用中
+                已启用
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-text/[0.05] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-text-muted">
@@ -503,16 +504,18 @@ function ModelCard({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {!model.isActive && (
-            <button
-              type="button"
-              onClick={onActivate}
-              title="设为激活"
-              className="rounded-md px-2 py-1 font-serif text-xs text-accent transition-colors hover:bg-accent/[0.08]"
-            >
-              启用
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onToggleActive}
+            title={model.isActive ? "禁用" : "启用"}
+            className={`rounded-md px-2 py-1 font-serif text-xs transition-colors ${
+              model.isActive
+                ? "text-text-muted hover:bg-bg-soft hover:text-[#9C4B3C]"
+                : "text-accent hover:bg-accent/[0.08]"
+            }`}
+          >
+            {model.isActive ? "禁用" : "启用"}
+          </button>
           <button
             type="button"
             onClick={onEdit}

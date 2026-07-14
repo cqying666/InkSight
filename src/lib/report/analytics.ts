@@ -14,6 +14,7 @@ export type AnalyticsEventName =
   | "material_saved"
   | "material_inserted"
   | "material_searched"
+  | "material_deleted"
   | "trend_viewed"
   | "trend_element_saved"
   | "writing_started"
@@ -46,6 +47,9 @@ export type AnalyticsEventName =
   | "coach_message_sent"
   | "coach_text_inserted"
   | "stuck_bubble_shown"
+  | "guide_analysis_completed"
+  | "guide_analysis_failed"
+  | "guide_analysis_saved_to_material"
   | "stuck_bubble_clicked"
   | "newcomer_guide_dismissed"
   | "works_viewed"
@@ -54,7 +58,9 @@ export type AnalyticsEventName =
   | "work_opened"
   | "work_marked_sold"
   | "work_sale_cleared"
-  | "ai_control_viewed";
+  | "ai_control_viewed"
+  | "generation_adopted"
+  | "generation_discarded";
 
 export interface AnalyticsEvent {
   name: AnalyticsEventName;

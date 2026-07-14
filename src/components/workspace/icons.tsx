@@ -200,26 +200,6 @@ export function CloseIcon({ className = base }: IconProps) {
   );
 }
 
-export function DrawerIcon({ className = base }: IconProps) {
-  // 伴随面板：侧栏抽屉
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="5" width="18" height="14" rx="1" />
-      <path d="M15 5v14" />
-      <path d="M17 9h2M17 12h2M17 15h2" />
-    </svg>
-  );
-}
-
 export function HomeIcon({ className = base }: IconProps) {
   // 首页：屋檐
   return (

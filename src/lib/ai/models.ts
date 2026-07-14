@@ -1,7 +1,7 @@
 /**
  * AI 模型接入配置存储层
  *
- * 多模型配置，同一时间仅一个 is_active=1。
+ * 多模型配置，支持多个模型同时启用（is_active=1）。
  * 服务端专用（直接读 better-sqlite3 同步接口）。
  *
  * 数据来源：SQLite ai_models 表
@@ -62,13 +62,22 @@ export function listModelsInternal(): AIModelConfig[] {
   return listModels();
 }
 
-/** 获取当前激活的模型配置；无激活时返回 null */
+/** 获取当前启用的模型配置（取第一个 is_active=1）；无启用时返回 null */
 export function getActiveModel(): AIModelConfig | null {
   const db = getDb();
   const row = db
-    .prepare("SELECT * FROM ai_models WHERE is_active = 1 LIMIT 1")
+    .prepare("SELECT * FROM ai_models WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1")
     .get() as AIModelRow | undefined;
   return row ? rowToConfig(row) : null;
+}
+
+/** 列出全部已启用的模型配置（is_active=1），按创建时间正序 */
+export function listActiveModels(): AIModelConfig[] {
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT * FROM ai_models WHERE is_active = 1 ORDER BY created_at ASC")
+    .all() as AIModelRow[];
+  return rows.map(rowToConfig);
 }
 
 export interface CreateModelInput {
@@ -86,26 +95,20 @@ export function createModel(input: CreateModelInput): AIModelConfig {
   const id = generateId();
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
-    if (input.isActive) {
-      db.prepare("UPDATE ai_models SET is_active = 0").run();
-    }
-    db.prepare(
-      `INSERT INTO ai_models (id, name, provider, base_url, api_key, model, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      id,
-      input.name,
-      input.provider,
-      input.baseURL,
-      input.apiKey,
-      input.model,
-      input.isActive ? 1 : 0,
-      now,
-      now
-    );
-  });
-  tx();
+  db.prepare(
+    `INSERT INTO ai_models (id, name, provider, base_url, api_key, model, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    input.name,
+    input.provider,
+    input.baseURL,
+    input.apiKey,
+    input.model,
+    input.isActive ? 1 : 0,
+    now,
+    now
+  );
 
   const row = db.prepare("SELECT * FROM ai_models WHERE id = ?").get(id) as AIModelRow;
   return rowToConfig(row);
@@ -151,22 +154,23 @@ export function updateModel(id: string, input: UpdateModelInput): AIModelConfig 
   return rowToConfig(next);
 }
 
-/** 设置某模型为激活（其余自动置为未激活） */
-export function setActiveModel(id: string): boolean {
+/**
+ * 设置某模型的启用状态（不影响其他模型）
+ * @param id 模型 id
+ * @param active true=启用 / false=禁用
+ */
+export function setModelActive(id: string, active: boolean): boolean {
   const db = getDb();
   const existing = db
     .prepare("SELECT 1 FROM ai_models WHERE id = ?")
     .get(id);
   if (!existing) return false;
 
-  const tx = db.transaction(() => {
-    db.prepare("UPDATE ai_models SET is_active = 0").run();
-    db.prepare("UPDATE ai_models SET is_active = 1, updated_at = ? WHERE id = ?").run(
-      new Date().toISOString(),
-      id
-    );
-  });
-  tx();
+  db.prepare("UPDATE ai_models SET is_active = ?, updated_at = ? WHERE id = ?").run(
+    active ? 1 : 0,
+    new Date().toISOString(),
+    id
+  );
   return true;
 }
 

@@ -257,7 +257,7 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
             />
           </div>
 
-          {/* 设为激活 */}
+          {/* 启用此模型 */}
           <label className="flex cursor-pointer items-center gap-2 pt-1">
             <input
               type="checkbox"
@@ -266,13 +266,11 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
               className="h-4 w-4 rounded border-text/[0.2] accent-accent"
             />
             <span className="font-serif text-sm text-text">
-              设为当前激活模型
+              启用此模型
             </span>
-            {initial?.isActive && !isActive && (
-              <span className="ml-auto font-mono text-[10px] text-text-muted/60">
-                取消后无激活模型，将回退环境变量
-              </span>
-            )}
+            <span className="ml-auto font-mono text-[10px] text-text-muted/60">
+              支持同时启用多个模型
+            </span>
           </label>
 
           {errorMsg && (
