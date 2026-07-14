@@ -17,7 +17,7 @@ import { CloseIcon } from "@/components/workspace/icons";
 interface StuckDetectionBubbleProps {
   wordCount: number; // 当前字数，变化时重置计时器
   isActive: boolean; // 是否在写作视图（非 draft 视图时不触发）
-  onOpenCoach: () => void; // 打开 AI 教练
+  onOpenCoach: (anchor?: { top: number; left: number }) => void; // 打开 AI 教练
 }
 
 const IDLE_THRESHOLD_MS = 120_000; // 2 分钟无输入

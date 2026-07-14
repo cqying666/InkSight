@@ -71,6 +71,15 @@ export function getActiveModel(): AIModelConfig | null {
   return row ? rowToConfig(row) : null;
 }
 
+/** 按 id 获取模型配置（含完整 apiKey） */
+export function getModelById(id: string): AIModelConfig | null {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT * FROM ai_models WHERE id = ?")
+    .get(id) as AIModelRow | undefined;
+  return row ? rowToConfig(row) : null;
+}
+
 /** 列出全部已启用的模型配置（is_active=1），按创建时间正序 */
 export function listActiveModels(): AIModelConfig[] {
   const db = getDb();

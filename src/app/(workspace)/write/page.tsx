@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Editor } from "@/components/write/Editor";
 import { StageGate } from "@/components/write/StageGate";
@@ -32,7 +31,6 @@ import type {
   ChatMessage,
 } from "@/lib/write/coach-context";
 import { buildIndex, search, type SearchResult } from "@/lib/material/search-tfidf";
-import { splitParagraphs } from "@/lib/report/session";
 import { loadAllMaterials } from "@/lib/material/catalog";
 import { materialToCoachText } from "@/lib/material/from-analysis";
 import type { Material } from "@/lib/material";
@@ -41,24 +39,17 @@ import { trackEvent } from "@/lib/report/analytics";
 import { useUserProfile } from "@/lib/report/use-user-profile";
 import { createPortal } from "react-dom";
 
-// MaterialSidebar 含 TF-IDF 索引构建（buildIndex），是 /write 最重的部分
-const MaterialSidebar = dynamic(
-  () =>
-    import("@/components/write/MaterialSidebar").then((m) => m.MaterialSidebar),
-  { ssr: false }
-);
-
 /**
  * 创作工作台页
  *
- * 布局：全局导航 + 工作台导航 + 双栏（左参考 + 右正文） + 素材抽屉
+ * 布局：全局导航 + 工作台导航 + 三栏（左参考 + 中正文 + 右AI对话）
  *
  * 左栏（参考区）：对标文 / 大纲 / 细纲 / 人物小传（不含正文）
  * 右栏（正文编辑器）：始终常驻，可缩放字号
  * 分隔条：磁吸 3 档（320 / 420 / 520px），双击复位
  *
  * 快捷键：
- * - /：在空行唤出 AI 教练浮窗
+ * - 空格：在空编辑器唤出 AI 教练浮窗
  * - Cmd+.：深度专注模式
  * - Alt+←/→：切换分栏档位
  */
@@ -81,15 +72,9 @@ const SPLIT_STORAGE_KEY = "inksight:write:split-width";
 // AI 教练对话历史持久化 key（半隔离：每个面板独立）
 const COACH_MESSAGES_KEY = "inksight:write:coach-messages";
 
-// 所有面板的初始欢迎消息
-function createInitialPanelMessages(): Record<PanelKey, ChatMessage[]> {
-  return {
-    draft: [createWelcomeMessage("draft")],
-    benchmark: [createWelcomeMessage("benchmark")],
-    outline: [createWelcomeMessage("outline")],
-    synopsis: [createWelcomeMessage("synopsis")],
-    characters: [createWelcomeMessage("characters")],
-  };
+// 右侧 AI 对话的初始欢迎消息（共享，不随面板切换）
+function createInitialChatMessages(): ChatMessage[] {
+  return [createWelcomeMessage("draft")];
 }
 
 // A5：根据用户阶段判断视图推荐状态
@@ -119,10 +104,18 @@ export default function WritePage() {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [deepFocus, setDeepFocus] = useState(false);
   const [showAIOverlay, setShowAIOverlay] = useState(false);
-  const [materialExpanded, setMaterialExpanded] = useState(false);
-  const [materialMounted, setMaterialMounted] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  /** AI 浮窗锚点（光标位置），null 时默认底部居中 */
+  const [overlayAnchor, setOverlayAnchor] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  /** 编辑区空格唤起的浮窗独立消息历史（与右侧 AI 面板隔离，关闭时清空） */
+  const [overlayMessages, setOverlayMessages] = useState<ChatMessage[]>([]);
+  /** 浮窗 remount key：每次唤起时递增，确保状态完全重置 */
+  const [overlayKey, setOverlayKey] = useState(0);
+  const [chatExpanded, setChatExpanded] = useState(true);
   const [showRightDrawer, setShowRightDrawer] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [documents, setDocuments] = useState<WorkspaceDocuments>(
     EMPTY_WORKSPACE_DOCUMENTS
   );
@@ -143,29 +136,19 @@ export default function WritePage() {
     useState<GenerationPendingState | null>(null);
   // 新建模式下参考文档自动创建作品后，通知 Editor 同步 workIdRef
   const [externalWorkId, setExternalWorkId] = useState<string | null>(null);
-  // AI 教练对话历史（半隔离：每个面板独立维护）
-  const [panelMessages, setPanelMessages] = useState<
-    Record<PanelKey, ChatMessage[]>
-  >(() => {
-    if (typeof window === "undefined") return createInitialPanelMessages();
+  // AI 教练对话历史（共享，不随面板切换）
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === "undefined") return createInitialChatMessages();
     try {
       const stored = localStorage.getItem(COACH_MESSAGES_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored) as Partial<
-          Record<PanelKey, ChatMessage[]>
-        >;
-        const initial = createInitialPanelMessages();
-        for (const key of Object.keys(initial) as PanelKey[]) {
-          if (parsed[key] && Array.isArray(parsed[key]!) && parsed[key]!.length > 0) {
-            initial[key] = parsed[key]!;
-          }
-        }
-        return initial;
+        const parsed = JSON.parse(stored) as ChatMessage[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {
       // ignore
     }
-    return createInitialPanelMessages();
+    return createInitialChatMessages();
   });
 
   // P0-3：分栏宽度状态
@@ -213,11 +196,18 @@ export default function WritePage() {
           documentsRef.current = docs;
         }
       } else {
-        // 新建模式：对标文/大纲/细纲/人物小传全部为空
+        // 新建模式：对标文/大纲/细纲/人物小传全部为空，清空之前的 AI 对话历史
         workIdRef.current = null;
         setInitialWork(null);
         setDocuments(EMPTY_WORKSPACE_DOCUMENTS);
         documentsRef.current = EMPTY_WORKSPACE_DOCUMENTS;
+        const fresh = createInitialChatMessages();
+        setChatMessages(fresh);
+        try {
+          localStorage.setItem(COACH_MESSAGES_KEY, JSON.stringify(fresh));
+        } catch {
+          // ignore
+        }
       }
 
       // 检查是否从首页 @技能 跳转过来（?generating=guide|outline|detail-outline）
@@ -274,6 +264,9 @@ export default function WritePage() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
+        setOverlayAnchor(null);
+        setOverlayMessages([]);
+        setOverlayKey((k) => k + 1);
         setShowAIOverlay((v) => !v);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ".") {
@@ -375,21 +368,6 @@ export default function WritePage() {
     ) as HTMLInputElement | null;
     return el?.value || "";
   }, []);
-
-  const handleAnalyze = useCallback(() => {
-    const html = getEditorHtml();
-    const title = getTitle();
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    const text = tmp.textContent || "";
-    if (text.trim().length < 100) return;
-    const paragraphs = splitParagraphs(text);
-    sessionStorage.setItem(
-      "inksight:pending",
-      JSON.stringify({ text, paragraphs, title })
-    );
-    router.push("/analyzing");
-  }, [getEditorHtml, getTitle, router]);
 
   const updateDocument = useCallback(
     (key: WorkspaceDocumentKey, value: string) => {
@@ -523,9 +501,48 @@ export default function WritePage() {
   }, [documents, getTitle, wordCount, activeView, getPanelContent]);
 
   // 隐式 RAG：根据用户消息从素材库检索相关素材
+  // 先尝试 Zvec 向量语义搜索（服务端），失败降级到 TF-IDF（客户端内存索引）
   const searchMaterials = useCallback(
-    (query: string): CoachReference[] => {
-      if (!indexRef.current || !query.trim()) return [];
+    async (query: string): Promise<CoachReference[]> => {
+      if (!query.trim()) return [];
+
+      // 1. 先尝试 Zvec 向量搜索（服务端，真正的语义检索）
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch("/api/materials/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, opts: { topN: 3 } }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+            return data.results.map(
+              ({ material }: { material: Material }) => ({
+                id: `implicit:${material.id}`,
+                kind: "material" as const,
+                label:
+                  material.component?.summary.slice(0, 24) ||
+                  material.inspiration?.title.slice(0, 24) ||
+                  material.atom?.text.slice(0, 24) ||
+                  "素材",
+                content: materialToCoachText(material).slice(0, 500),
+                implicit: true,
+              })
+            );
+          }
+        }
+        // 索引未构建或搜索失败，降级到 TF-IDF
+      } catch {
+        // 网络错误或超时，降级到 TF-IDF
+      }
+
+      // 2. TF-IDF 降级（客户端内存索引，关键词匹配）
+      if (!indexRef.current) return [];
       const results = search(indexRef.current, query, {
         topN: 3,
         minScore: 0.06,
@@ -545,21 +562,15 @@ export default function WritePage() {
     []
   );
 
-  // 半隔离：更新当前面板的对话历史，持久化到 localStorage
-  const handleMessagesChange = useCallback(
-    (messages: ChatMessage[]) => {
-      setPanelMessages((prev) => {
-        const next = { ...prev, [activeView]: messages };
-        try {
-          localStorage.setItem(COACH_MESSAGES_KEY, JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-        return next;
-      });
-    },
-    [activeView]
-  );
+  // 更新右侧 AI 对话历史，持久化到 localStorage
+  const handleMessagesChange = useCallback((messages: ChatMessage[]) => {
+    setChatMessages(messages);
+    try {
+      localStorage.setItem(COACH_MESSAGES_KEY, JSON.stringify(messages));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // 将教练回复插入到当前面板编辑器（决策 4：对话内预览 → 一键插入）
   const handleInsertText = useCallback(
@@ -617,10 +628,9 @@ export default function WritePage() {
     [activeView, updateDocument]
   );
 
-  const handleExpandMaterial = useCallback(() => {
-    if (!materialMounted) setMaterialMounted(true);
-    setMaterialExpanded((v) => !v);
-  }, [materialMounted]);
+  const handleExpandChat = useCallback(() => {
+    setChatExpanded(true);
+  }, []);
 
   // Editor 首次保存生成作品 id 后回调：切换为编辑模式，后续参考文档编辑可独立持久化
   const handleWorkIdGenerated = useCallback((id: string) => {
@@ -719,8 +729,8 @@ export default function WritePage() {
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <kbd className="rounded-sm border border-text/[0.06] bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
-              /
+            <kbd className="rounded-sm border border-text/[0.06] bg-surface px-2 py-0.5 font-mono text-[10px] text-text-muted">
+              Space
             </kbd>
             <span className="hidden font-mono text-[10px] text-text-muted sm:inline">
               唤出教练
@@ -735,7 +745,7 @@ export default function WritePage() {
               onClick={() => setShowRightDrawer(true)}
               className="rounded-sm border border-text/[0.06] px-2 py-0.5 font-mono text-[10px] text-text-muted transition-colors hover:text-text lg:hidden"
             >
-              素材
+              AI
             </button>
           </div>
         </header>
@@ -914,6 +924,12 @@ export default function WritePage() {
                       placeholder="粘贴对标文，随时编辑批注…"
                       onChange={(value) => updateDocument("benchmark", value)}
                       panelId="benchmark"
+                      onOpenCoach={(anchor) => {
+              setOverlayAnchor(anchor ?? null);
+              setOverlayMessages([]);
+              setOverlayKey((k) => k + 1);
+              setShowAIOverlay(true);
+            }}
                     />
                   )}
 
@@ -923,6 +939,12 @@ export default function WritePage() {
                       placeholder="按章节创造大纲…"
                       onChange={(value) => updateDocument("outline", value)}
                       panelId="outline"
+                      onOpenCoach={(anchor) => {
+              setOverlayAnchor(anchor ?? null);
+              setOverlayMessages([]);
+              setOverlayKey((k) => k + 1);
+              setShowAIOverlay(true);
+            }}
                     />
                   )}
 
@@ -932,6 +954,12 @@ export default function WritePage() {
                       placeholder="按章节写下事件推进、情绪变化、卡点与反转…"
                       onChange={(value) => updateDocument("synopsis", value)}
                       panelId="synopsis"
+                      onOpenCoach={(anchor) => {
+              setOverlayAnchor(anchor ?? null);
+              setOverlayMessages([]);
+              setOverlayKey((k) => k + 1);
+              setShowAIOverlay(true);
+            }}
                     />
                   )}
 
@@ -941,6 +969,12 @@ export default function WritePage() {
                       placeholder="记录人物的来处、欲望、恐惧、关系、转折与最终变化…"
                       onChange={(value) => updateDocument("characters", value)}
                       panelId="characters"
+                      onOpenCoach={(anchor) => {
+              setOverlayAnchor(anchor ?? null);
+              setOverlayMessages([]);
+              setOverlayKey((k) => k + 1);
+              setShowAIOverlay(true);
+            }}
                     />
                   )}
                 </div>
@@ -978,7 +1012,12 @@ export default function WritePage() {
               <Editor
                 onFocusModeChange={setDeepFocus}
                 onWordCountChange={setWordCount}
-                onOpenCoach={() => setShowAIOverlay(true)}
+                onOpenCoach={(anchor) => {
+              setOverlayAnchor(anchor ?? null);
+              setOverlayMessages([]);
+              setOverlayKey((k) => k + 1);
+              setShowAIOverlay(true);
+            }}
                 initialWorkId={initialWork?.id}
                 initialTitle={initialWork?.title}
                 initialHtml={initialWork?.html}
@@ -996,50 +1035,54 @@ export default function WritePage() {
               <StageGate
                 wordCount={wordCount}
                 hasOutline={!!documents.outline.trim()}
-                onAnalyze={handleAnalyze}
               />
             )}
           </div>
         </div>
 
-        {/* --- 右栏：素材库抽屉 --- */}
+        {/* --- 右栏：AI 对话区 --- */}
         {!deepFocus && (
           <aside
             className={`hidden flex-shrink-0 flex-col border-l border-text/[0.06] transition-[width] duration-200 lg:flex ${
-              materialExpanded ? "lg:w-[280px]" : "w-8"
+              chatExpanded ? "lg:w-[340px]" : "w-8"
             }`}
           >
-            {materialExpanded ? (
+            {chatExpanded ? (
               <>
                 <button
                   type="button"
-                  onClick={() => setMaterialExpanded(false)}
+                  onClick={() => setChatExpanded(false)}
                   className="flex h-8 flex-shrink-0 items-center justify-between border-b border-text/[0.06] px-3 transition-colors hover:bg-bg-soft/40"
                 >
                   <span className="font-mono text-[10px] text-text-muted">
-                    素材库
+                    AI 对话
                   </span>
                   <span className="font-mono text-[10px] text-text-muted/50">
                     ▸ 收起
                   </span>
                 </button>
-                {materialMounted ? (
-                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3">
-                    <MaterialSidebar />
-                  </div>
-                ) : null}
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <AICoachPanel
+                    activePanel={activeView}
+                    getContext={getCoachContext}
+                    searchMaterials={searchMaterials}
+                    messages={chatMessages}
+                    onMessagesChange={handleMessagesChange}
+                    onInsertText={handleInsertText}
+                  />
+                </div>
               </>
             ) : (
               <button
                 type="button"
-                onClick={handleExpandMaterial}
+                onClick={handleExpandChat}
                 className="group flex h-full w-full flex-col items-center gap-2 pt-3 transition-colors hover:bg-bg-soft/40"
-                title="展开素材库"
+                title="展开 AI 对话"
               >
                 <span className="font-mono text-[10px] text-text-muted transition-colors group-hover:text-accent-warm"
                   style={{ writingMode: "vertical-rl" }}
                 >
-                  素材
+                  AI
                 </span>
                 <span className="font-mono text-[10px] text-text-muted/50">
                   ◂
@@ -1068,10 +1111,15 @@ export default function WritePage() {
       <StuckDetectionBubble
         wordCount={wordCount}
         isActive={!deepFocus}
-        onOpenCoach={() => setShowAIOverlay(true)}
+        onOpenCoach={(anchor) => {
+              setOverlayAnchor(anchor ?? null);
+              setOverlayMessages([]);
+              setOverlayKey((k) => k + 1);
+              setShowAIOverlay(true);
+            }}
       />
 
-      {/* ===== 中小屏素材抽屉 ===== */}
+      {/* ===== 中小屏 AI 对话抽屉 ===== */}
       {showRightDrawer && (
         <div
           className="fixed inset-0 z-50 bg-text/30 lg:hidden"
@@ -1083,7 +1131,7 @@ export default function WritePage() {
           >
             <div className="flex h-9 flex-shrink-0 items-center justify-between border-b border-text/[0.06] px-3">
               <span className="font-serif text-sm font-semibold text-text">
-                素材库
+                AI 对话
               </span>
               <button
                 onClick={() => setShowRightDrawer(false)}
@@ -1092,23 +1140,35 @@ export default function WritePage() {
                 ✕ 关闭
               </button>
             </div>
-            <div className="h-[calc(100%-36px)] overflow-y-auto">
-              <MaterialSidebar />
+            <div className="h-[calc(100%-36px)]">
+              <AICoachPanel
+                activePanel={activeView}
+                getContext={getCoachContext}
+                searchMaterials={searchMaterials}
+                messages={chatMessages}
+                onMessagesChange={handleMessagesChange}
+                onInsertText={handleInsertText}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== AI 教练 Portal Overlay ===== */}
+      {/* ===== AI 教练 Portal Overlay（独立消息历史，关闭即清空） ===== */}
       {showAIOverlay && mounted && (
         <AICoachOverlay
-          onClose={() => setShowAIOverlay(false)}
+          key={overlayKey}
+          onClose={() => {
+            setOverlayMessages([]);
+            setShowAIOverlay(false);
+          }}
           activePanel={activeView}
           getContext={getCoachContext}
           searchMaterials={searchMaterials}
-          messages={panelMessages[activeView] ?? [createWelcomeMessage(activeView)]}
-          onMessagesChange={handleMessagesChange}
+          messages={overlayMessages}
+          onMessagesChange={setOverlayMessages}
           onInsertText={handleInsertText}
+          anchor={overlayAnchor}
         />
       )}
 
@@ -1135,14 +1195,16 @@ function AICoachOverlay({
   messages,
   onMessagesChange,
   onInsertText,
+  anchor,
 }: {
   onClose: () => void;
   activePanel: PanelKey;
   getContext: () => CoachContext;
-  searchMaterials?: (query: string) => CoachReference[];
+  searchMaterials?: (query: string) => Promise<CoachReference[]>;
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
   onInsertText?: (text: string) => void;
+  anchor?: { top: number; left: number } | null;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -1159,14 +1221,22 @@ function AICoachOverlay({
 
   if (!mounted) return null;
 
+  // 计算浮层定位：有锚点时跟随光标，否则底部居中
+  const overlayWidth = 520;
+  const anchorLeft = anchor
+    ? Math.min(anchor.left, window.innerWidth - overlayWidth - 16)
+    : null;
+  const overlayStyle: CSSProperties = anchor
+    ? { top: `${anchor.top + 8}px`, left: `${anchorLeft}px`, width: `${overlayWidth}px` }
+    : { bottom: "40px", left: "50%", transform: "translateX(-50%)", width: `${overlayWidth}px` };
+
   return createPortal(
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center"
-      onClick={onClose}
-    >
-      <div className="absolute inset-0 bg-primary/20 backdrop-blur-[2px]" />
+    <>
+      {/* 透明遮罩：捕获点击外部关闭，不置灰背景 */}
+      <div className="fixed inset-0 z-[60]" onClick={onClose} />
       <div
-        className="relative flex h-[60vh] w-full max-w-[560px] flex-col overflow-hidden rounded-lg border border-text/[0.06] bg-surface shadow-xl"
+        className="fixed z-[61] px-2"
+        style={overlayStyle}
         onClick={(e) => e.stopPropagation()}
       >
         <AICoachPanel
@@ -1180,7 +1250,7 @@ function AICoachOverlay({
           onInsertText={onInsertText}
         />
       </div>
-    </div>,
+    </>,
     document.body
   );
 }

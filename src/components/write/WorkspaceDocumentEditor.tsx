@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, type ChangeEvent } from "react";
+import { useRef, useEffect, type ChangeEvent, type KeyboardEvent } from "react";
 
 interface Props {
   value: string;
@@ -8,6 +8,8 @@ interface Props {
   onChange: (value: string) => boolean;
   /** 面板标识，用于 AI 教练插入文本时定位编辑器 */
   panelId: string;
+  /** 空格键唤起 AI 教练（仅在编辑器为空时触发） */
+  onOpenCoach?: (anchor?: { top: number; left: number }) => void;
 }
 
 export function WorkspaceDocumentEditor({
@@ -15,6 +17,7 @@ export function WorkspaceDocumentEditor({
   placeholder,
   onChange,
   panelId,
+  onOpenCoach,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -30,6 +33,19 @@ export function WorkspaceDocumentEditor({
     onChange(e.target.value);
   };
 
+  // 空格键唤起 AI 教练：仅在编辑器为空且光标在起始位置时触发
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== " " || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!onOpenCoach) return;
+    const ta = e.currentTarget;
+    // 仅当内容为空且光标在起始位置时触发
+    if (ta.value.length === 0 && ta.selectionStart === 0) {
+      e.preventDefault();
+      const rect = ta.getBoundingClientRect();
+      onOpenCoach({ top: rect.top + 24, left: rect.left + 16 });
+    }
+  };
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="px-6 py-6">
@@ -37,6 +53,7 @@ export function WorkspaceDocumentEditor({
           ref={taRef}
           value={value}
           onChange={handleChange}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           data-panel={panelId}
           className="w-full resize-none bg-transparent font-serif text-[17px] leading-[1.9] text-text outline-none placeholder:text-text-muted/40"

@@ -59,7 +59,7 @@ function normalizeLegacyHtml(html: string): string {
 interface Props {
   onFocusModeChange?: (focusMode: boolean) => void;
   onWordCountChange?: (count: number) => void;
-  onOpenCoach?: () => void;
+  onOpenCoach?: (anchor?: { top: number; left: number }) => void;
   /** 编辑模式：作品 id（用于 upsert 同一篇作品） */
   initialWorkId?: string;
   /** 编辑模式：作品标题，灌入标题输入框 */
@@ -145,7 +145,7 @@ export function Editor({
         heading: { levels: [2] },
       }),
       Placeholder.configure({
-        placeholder: "开始写作…",
+        placeholder: "输入空格唤起AI对话",
         emptyNodeClass: "is-editor-empty",
       }),
     ],
@@ -172,9 +172,9 @@ export function Editor({
         }
         return false;
       },
-      // / 键唤出 AI 教练（仅在空段落行首）
+      // 空格键唤出 AI 教练（仅在空段落行首）
       handleKeyDown: (view, event) => {
-        if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
+        if (event.key !== " " || event.metaKey || event.ctrlKey || event.altKey) {
           return false;
         }
         const { state } = view;
@@ -185,7 +185,8 @@ export function Editor({
         if ($pos.parentOffset !== 0) return false;
         if ($pos.parent.textContent.length > 0) return false;
         event.preventDefault();
-        onOpenCoachRef.current?.();
+        const coords = view.coordsAtPos(selection.$from.pos);
+        onOpenCoachRef.current?.({ top: coords.bottom, left: coords.left });
         return true;
       },
     },
