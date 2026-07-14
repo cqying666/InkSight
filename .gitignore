@@ -17,6 +17,10 @@ build/
 dist/
 dist-ssr
 
+# ===== AI 模型缓存与向量索引（体积大，不提交）=====
+.models/
+.zvec-data/
+
 # ===== 原型与设计稿（不纳入产品仓库）=====
 inksight-prototype/
 

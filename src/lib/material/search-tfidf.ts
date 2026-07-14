@@ -68,9 +68,9 @@ interface TfIdfIndex {
 }
 
 /**
- * 从 Material 提取可索引文本
+ * 从 Material 提取可索引文本（供 TF-IDF 和 Zvec 向量索引共用）
  */
-function materialToText(m: Material): string {
+export function materialToText(m: Material): string {
   const parts: string[] = [];
   if (m.atom) {
     parts.push(m.atom.text);

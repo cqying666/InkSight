@@ -33,6 +33,7 @@ export {
   keywordFallback,
   matchesFilters,
   listFilterValues,
+  materialToText,
   NOVEL_TYPE_LABEL,
   EMOTION_SHAPES,
   type SearchResult,

@@ -7,8 +7,14 @@ const nextConfig = {
         ? { exclude: ["error"] }
         : false,
   },
-  // better-sqlite3 是 native 模块，不打包进 bundle
-  serverExternalPackages: ["better-sqlite3"],
+  // native / 大型模块不打包进 bundle，由 Node.js runtime 直接 require
+  serverExternalPackages: [
+    "better-sqlite3",
+    "@zvec/zvec",
+    "@xenova/transformers",
+    "onnxruntime-node",
+    "sharp",
+  ],
   experimental: {
     // barrel index 优化，避免全量打包
     optimizePackageImports: ["@/lib/material", "@/lib/trend"],
@@ -29,6 +35,9 @@ const nextConfig = {
       config.resolve.alias = {
         ...(config.resolve.alias || {}),
         "better-sqlite3": false,
+        "@zvec/zvec": false,
+        "@xenova/transformers": false,
+        "onnxruntime-node": false,
       };
     }
     return config;
