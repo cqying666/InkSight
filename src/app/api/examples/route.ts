@@ -16,7 +16,7 @@ function isExampleWork(value: unknown): value is ExampleWork {
     (item.status === "uploaded" ||
       (item.status === "analyzed" &&
         typeof item.reportId === "string" &&
-        Boolean(item.analysis)))
+        (Boolean(item.analysis) || Boolean(item.guideAnalysis))))
   );
 }
 

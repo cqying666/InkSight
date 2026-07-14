@@ -158,14 +158,12 @@ export function XrayReport({ analysis, paragraphs, initialTab = "plot" }: Props)
             </div>
             <div className="space-y-4">
               {paragraphs.map((p, i) => (
-                <div key={i} className="flex gap-3">
-                  <span className="shrink-0 font-mono text-xs leading-[1.85] text-text-muted">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <p className="flex-1 whitespace-pre-wrap font-serif text-[15px] leading-[1.85] text-text">
-                    {p}
-                  </p>
-                </div>
+                <p
+                  key={i}
+                  className="whitespace-pre-wrap font-serif text-[15px] leading-[1.85] text-text"
+                >
+                  {p}
+                </p>
               ))}
             </div>
           </div>

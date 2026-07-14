@@ -205,7 +205,7 @@ export default function ReportPage() {
     }
 
     lines.push(`## 原文`);
-    paras.forEach((p, i) => lines.push(`${String(i + 1).padStart(2, "0")}. ${p}`));
+    paras.forEach((p) => lines.push(p));
 
     const blob = new Blob([lines.join("\n")], {
       type: "text/markdown;charset=utf-8",

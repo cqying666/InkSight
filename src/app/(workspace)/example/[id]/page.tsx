@@ -79,10 +79,9 @@ export default function ExampleDetailPage() {
           <div className="mb-5 text-xs uppercase tracking-[0.15em] text-text-muted">原文（{example.paragraphs.length} 段）</div>
           <div className="space-y-4">
             {example.paragraphs.map((paragraph, index) => (
-              <div key={index} className="flex gap-3">
-                <span className="shrink-0 font-mono text-xs leading-[1.85] text-text-muted">{String(index + 1).padStart(2, "0")}</span>
-                <p className="flex-1 whitespace-pre-wrap font-serif text-[15px] leading-[1.85] text-text">{paragraph}</p>
-              </div>
+              <p key={index} className="whitespace-pre-wrap font-serif text-[15px] leading-[1.85] text-text">
+                {paragraph}
+              </p>
             ))}
           </div>
         </section>

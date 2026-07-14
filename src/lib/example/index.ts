@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "@/lib/analysis/pipeline";
+import type { GuideAnalysisResult } from "@/lib/analysis/guide-pipeline";
 import { splitParagraphs } from "@/lib/report/session";
 
 export type ExampleStatus = "uploaded" | "analyzed";
@@ -14,6 +15,8 @@ export interface ExampleWork {
   status: ExampleStatus;
   reportId?: string;
   analysis?: AnalysisResult;
+  /** 导语专项拆解结果（由首页导语分析沉淀而来）*/
+  guideAnalysis?: GuideAnalysisResult;
   createdAt: string;
   updatedAt: string;
 }
