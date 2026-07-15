@@ -345,7 +345,7 @@ export function AICoachPanel({
           overlay?: boolean;
         } = { messages: apiMessages, context };
         if (overlay) reqBody.overlay = true;
-        if (overlay && modelId) reqBody.modelId = modelId;
+        if (modelId) reqBody.modelId = modelId;
         const resp = await fetch("/api/coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

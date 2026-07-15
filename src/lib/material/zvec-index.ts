@@ -283,7 +283,7 @@ export async function searchVector(
   // 生成 query embedding
   const queryVector = await embed(query);
 
-  const collection = getCollection();
+  const collection = getReadonlyCollection();
   const results = collection.querySync({
     fieldName: VECTOR_FIELD,
     vector: queryVector,
