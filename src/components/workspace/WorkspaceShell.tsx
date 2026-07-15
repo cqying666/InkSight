@@ -6,11 +6,32 @@ import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
 const NAV_KEY = "inksight:nav-collapsed";
 
+type CurrentUser = {
+  username: string;
+  role: "admin" | "experience";
+  displayName?: string | null;
+} | null;
+
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [user, setUser] = useState<CurrentUser>(null);
   const pathname = usePathname();
+
+  // 获取当前登录用户（用于侧栏角色过滤与用户区显示）
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setUser(data?.user ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   // 恢复折叠偏好（仅客户端）
   useEffect(() => {
@@ -120,6 +141,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <WorkspaceSidebar
             collapsed={collapsed}
             onToggleCollapse={toggleCollapse}
+            user={user}
           />
         </div>
       </div>
@@ -151,6 +173,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
             collapsed={false}
             onToggleCollapse={() => setMobileNavOpen(false)}
             onNavigate={() => setMobileNavOpen(false)}
+            user={user}
           />
         </div>
       </div>

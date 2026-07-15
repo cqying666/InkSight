@@ -1,0 +1,30 @@
+services:
+  inksight:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # 持久化数据（SQLite 数据库、向量索引、ONNX 模型缓存）
+      - ./data:/app/data
+      - ./.zvec-data:/app/.zvec-data
+      - ./.models:/app/.models
+    environment:
+      - NODE_ENV=production
+      # 鉴权配置：管理员账户（仅在数据库 users 表为空时首次 bootstrap 写入）
+      # 必须修改为强密码；未配置 INKSIGHT_ADMIN_PASSWORD 时启动会生成一次性随机密码并打印到日志
+      - INKSIGHT_ADMIN_USERNAME=admin
+      - INKSIGHT_ADMIN_PASSWORD=ChangeMe-Strong-Password-Here
+      # JWT 签名密钥（生产环境必须设置为随机长字符串）
+      - INKSIGHT_JWT_SECRET=please-change-this-to-a-random-long-secret
+    restart: unless-stopped
+
+# 内网穿透：OrbStack 会拦截 Cloudflare Tunnel 的 DNS，改用 localtunnel（主机端运行）
+# 启动命令：npx localtunnel --port 3000
+# 或使用 cloudflared（需先关闭 OrbStack）：cloudflared tunnel --url http://localhost:3000
+#
+# 鉴权说明：
+#  - 账户信息仅存储在 SQLite 数据库 users 表中，代码不硬编码任何凭据
+#  - 管理员账户：仅首次启动（users 表为空时）从上方环境变量 bootstrap 写入数据库，
+#    之后完全以数据库为准；改密码请在「AI 管理 → 账户」页重置，或直接更新 users 表
+#  - 其他账户（含体验账户）：由管理员在「AI 管理 → 账户」页面创建与删除
+#  - 管理员体验账户角色区分：admin 可见 AI 管理，experience 不可见

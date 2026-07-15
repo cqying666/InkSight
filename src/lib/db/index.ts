@@ -12,6 +12,7 @@
  *  - analytics_events: 埋点事件（结构化列）
  *  - ai_models: AI 模型接入配置（多模型，单一激活）
  *  - ai_call_logs: AI 调用与消耗记录
+ *  - users: 账户（用户名 + bcrypt 哈希密码 + 角色 admin/experience）
  */
 
 import Database from "better-sqlite3";
@@ -103,6 +104,18 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_ai_logs_ts ON ai_call_logs(ts);
     CREATE INDEX IF NOT EXISTS idx_ai_logs_model ON ai_call_logs(model);
     CREATE INDEX IF NOT EXISTS idx_ai_logs_feature ON ai_call_logs(feature);
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'experience',
+      display_name TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
   `);
 }
 

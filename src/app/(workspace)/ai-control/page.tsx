@@ -56,6 +56,14 @@ interface AICallLog {
   error: string | null;
 }
 
+interface AccountUser {
+  id: string;
+  username: string;
+  role: "admin" | "experience";
+  displayName: string | null;
+  createdAt: string;
+}
+
 /** 功能标识 → 中文标签 */
 const FEATURE_LABELS: Record<string, string> = {
   teardown: "拆文",
@@ -123,15 +131,22 @@ export default function AIControlPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<AIModelFormData | null>(null);
 
+  // 账户管理
+  const [accounts, setAccounts] = useState<AccountUser[]>([]);
+  const [accountSheetOpen, setAccountSheetOpen] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
   const reloadAll = useCallback(async () => {
-    const [modelsRes, statsRes, logsRes] = await Promise.all([
+    const [modelsRes, statsRes, logsRes, accountsRes] = await Promise.all([
       fetch("/api/ai-models"),
       fetch("/api/ai-logs?stats=1"),
       fetch("/api/ai-logs?limit=200"),
+      fetch("/api/admin/users"),
     ]);
     if (modelsRes.ok) setModels(await modelsRes.json());
     if (statsRes.ok) setStats(await statsRes.json());
     if (logsRes.ok) setLogs(await logsRes.json());
+    if (accountsRes.ok) setAccounts(await accountsRes.json());
   }, []);
 
   const reloadLogs = useCallback(async () => {
@@ -211,6 +226,76 @@ export default function AIControlPage() {
       }
     } catch {
       // 静默
+    }
+  };
+
+  const handleCreateAccount = async (data: {
+    username: string;
+    password: string;
+    role: "admin" | "experience";
+    displayName?: string;
+  }) => {
+    setAccountError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setAccountError(j?.error || "创建失败");
+        return;
+      }
+      setAccountSheetOpen(false);
+      await reloadAll();
+    } catch {
+      setAccountError("网络异常");
+    }
+  };
+
+  const handleDeleteAccount = async (u: AccountUser) => {
+    if (!confirm(`确定删除账户「${u.username}」吗？`)) return;
+    try {
+      const res = await fetch(
+        `/api/admin/users?id=${encodeURIComponent(u.id)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        alert(j?.error || "删除失败");
+        return;
+      }
+      await reloadAll();
+    } catch {
+      // 静默
+    }
+  };
+
+  const handleResetPassword = async (u: AccountUser) => {
+    const password = window.prompt(`为账户「${u.username}」设置新密码（至少 4 位）`);
+    if (password === null) return;
+    if (password.length < 4) {
+      alert("密码至少 4 位");
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/admin/users?id=${encodeURIComponent(u.id)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        }
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        alert(j?.error || "重置失败");
+        return;
+      }
+      alert("密码已重置");
+    } catch {
+      alert("网络异常");
     }
   };
 
@@ -311,6 +396,75 @@ export default function AIControlPage() {
               ))}
             </div>
           )}
+        </section>
+
+        {/* 账户管理 */}
+        <section className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-base font-semibold text-text">
+              账户
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setAccountError(null);
+                setAccountSheetOpen(true);
+              }}
+              className="rounded-md bg-primary px-3 py-1.5 font-serif text-sm text-text-inverse transition-opacity hover:opacity-90"
+            >
+              + 新增账户
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-text/[0.06]">
+            <table className="w-full text-left">
+              <thead className="bg-bg-soft/60">
+                <tr className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-muted">
+                  <th className="px-3 py-2 font-medium">用户名</th>
+                  <th className="px-3 py-2 font-medium">角色</th>
+                  <th className="px-3 py-2 font-medium">显示名</th>
+                  <th className="px-3 py-2 text-right font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-text/[0.04]">
+                {accounts.map((u) => (
+                  <tr key={u.id} className="font-serif text-xs text-text/80">
+                    <td className="px-3 py-2">{u.username}</td>
+                    <td className="px-3 py-2">
+                      {u.role === "admin" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-accent/[0.12] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-accent">
+                          管理员
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-text/[0.05] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-text-muted">
+                          体验
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-text-muted">
+                      {u.displayName || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleResetPassword(u)}
+                        className="rounded-md px-2 py-1 font-serif text-xs text-text-muted transition-colors hover:bg-bg-soft hover:text-text"
+                      >
+                        重置密码
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAccount(u)}
+                        className="rounded-md px-2 py-1 font-serif text-xs text-text-muted transition-colors hover:bg-bg-soft hover:text-[#9C4B3C]"
+                      >
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         {/* 按模型 / 按功能 拆分 */}
@@ -434,6 +588,14 @@ export default function AIControlPage() {
         onClose={() => setSheetOpen(false)}
         onSaved={reloadAll}
       />
+
+      {accountSheetOpen && (
+        <AccountCreateSheet
+          error={accountError}
+          onClose={() => setAccountSheetOpen(false)}
+          onCreate={handleCreateAccount}
+        />
+      )}
     </main>
   );
 }
@@ -572,6 +734,123 @@ function BreakdownCard({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function AccountCreateSheet({
+  error,
+  onClose,
+  onCreate,
+}: {
+  error: string | null;
+  onClose: () => void;
+  onCreate: (data: {
+    username: string;
+    password: string;
+    role: "admin" | "experience";
+    displayName?: string;
+  }) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"admin" | "experience">("experience");
+  const [displayName, setDisplayName] = useState("");
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    onCreate({ username, password, role, displayName: displayName || undefined });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div
+        className="absolute inset-0 bg-text/30"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <form
+        onSubmit={submit}
+        className="relative z-10 w-full max-w-md rounded-t-xl border border-text/[0.06] bg-surface p-6 shadow-float sm:rounded-xl"
+      >
+        <h3 className="mb-4 font-display text-base font-semibold text-text">
+          新增账户
+        </h3>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-xs text-text-muted">用户名</span>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            autoFocus
+            className="w-full rounded-md border border-text/[0.08] bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent/40 focus:ring-2 focus:ring-accent/20"
+          />
+        </label>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-xs text-text-muted">
+            密码（至少 4 位）
+          </span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={4}
+            className="w-full rounded-md border border-text/[0.08] bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent/40 focus:ring-2 focus:ring-accent/20"
+          />
+        </label>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-xs text-text-muted">角色</span>
+          <select
+            value={role}
+            onChange={(e) =>
+              setRole(e.target.value as "admin" | "experience")
+            }
+            className="w-full rounded-md border border-text/[0.08] bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent/40"
+          >
+            <option value="experience">体验账户（不可见 AI 管理）</option>
+            <option value="admin">管理员（全部权限）</option>
+          </select>
+        </label>
+
+        <label className="mb-4 block">
+          <span className="mb-1 block text-xs text-text-muted">
+            显示名（可选）
+          </span>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="w-full rounded-md border border-text/[0.08] bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent/40 focus:ring-2 focus:ring-accent/20"
+          />
+        </label>
+
+        {error && (
+          <p className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-3 py-2 font-serif text-sm text-text-muted transition-colors hover:bg-bg-soft"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            className="rounded-md bg-primary px-4 py-2 font-serif text-sm text-text-inverse transition-opacity hover:opacity-90"
+          >
+            创建
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
