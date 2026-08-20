@@ -12,10 +12,15 @@
     "test:consistency:quick": "tsx tests/consistency-monitor.ts 3 1",
     "test:consistency:full": "tsx tests/consistency-monitor.ts 5 3",
     "test:classify-eval": "tsx tests/p4-t4-classification-eval.ts",
+    "test:pi-agent": "tsx --experimental-default-type=module tests/pi-agent-runtime.mts",
+    "test:coach-sessions": "tsx --experimental-default-type=module tests/coach-sessions.mts",
+    "test:pi-models": "tsx --experimental-default-type=module tests/pi-model-management.mts",
     "seed:synthetic": "tsx scripts/batch-teardown.ts --synthetic 40",
     "baseline:aggregate": "tsx scripts/aggregate-baseline.ts"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.84.2",
+    "@earendil-works/pi-ai": "0.84.2",
     "@tiptap/extension-character-count": "^3.27.3",
     "@tiptap/extension-placeholder": "^3.27.3",
     "@tiptap/pm": "^3.27.3",
@@ -28,7 +33,6 @@
     "jose": "^6.2.3",
     "mammoth": "^1.12.0",
     "next": "^15.1.0",
-    "openai": "^4.77.0",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -45,6 +49,7 @@
     "eslint-config-next": "^15.1.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "4.23.12",
     "typescript": "^5.7.2"
   }
 }

@@ -1,97 +1,16 @@
-import OpenAI from "openai";
-import { getActiveModel } from "@/lib/ai/models";
 import { logCall } from "@/lib/ai/logs";
+import { runPiAgent } from "@/lib/pi/agent";
 
 /**
  * LLM 服务接入层
- * 通过 openai SDK 复用任何 OpenAI 兼容接口，支持超时、重试、JSON 模式
+ * 通过 Pi AI Provider + Pi Agent Core 统一执行所有模型回合，支持超时、
+ * JSON 模式、流式事件和跨 OpenAI-compatible endpoint 的一致调用契约。
  *
  * 模型来源：SQLite ai_models 表中 is_active=1 的配置（由 AI 管理页配置）
  * 不再支持环境变量配置——所有模型接入请在网页 AI 管理页操作。
  *
  * 每次 callLLM 调用都会写入 ai_call_logs 表，用于 AI 管理页的调用消耗统计。
  */
-
-/** 缓存的客户端 + 来源标识，避免每次调用都查库 */
-interface ClientEntry {
-  client: OpenAI;
-  baseURL: string;
-  apiKey: string;
-  model: string;
-  /** 缓存写入时间，用于 TTL 失效检测 */
-  cachedAt: number;
-}
-
-let cached: ClientEntry | null = null;
-const CACHE_TTL_MS = 10_000; // 10 秒内复用，超过则重新查库（允许 UI 切换模型后较快生效）
-
-/**
- * 获取当前生效的 LLM 配置（来自 AI 管理页配置的激活模型）
- * 带 TTL 缓存，避免每次调用都查库
- *
- * 未配置激活模型时返回空配置，调用方应提示用户去 AI 管理页添加模型
- */
-export function getActiveLLMConfig(): {
-  apiKey: string;
-  baseURL: string;
-  model: string;
-} {
-  const now = Date.now();
-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
-    return {
-      apiKey: cached.apiKey,
-      baseURL: cached.baseURL,
-      model: cached.model,
-    };
-  }
-
-  try {
-    const active = getActiveModel();
-    if (active && active.apiKey) {
-      cached = {
-        client: new OpenAI({
-          apiKey: active.apiKey,
-          baseURL: active.baseURL,
-          timeout: 300_000,
-          maxRetries: 0,
-        }),
-        baseURL: active.baseURL,
-        apiKey: active.apiKey,
-        model: active.model,
-        cachedAt: now,
-      };
-      return {
-        apiKey: cached.apiKey,
-        baseURL: cached.baseURL,
-        model: cached.model,
-      };
-    }
-  } catch {
-    // DB 未初始化或读取失败
-  }
-
-  // 未配置激活模型：返回空配置，调用方据此提示用户
-  cached = null;
-  return { apiKey: "", baseURL: "", model: "" };
-}
-
-function getClient(): OpenAI | null {
-  const now = Date.now();
-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
-    return cached.client;
-  }
-  getActiveLLMConfig();
-  return cached?.client ?? null;
-}
-
-/** 强制刷新配置缓存（AI 管理页切换模型后调用） */
-export function refreshLLMConfigCache(): void {
-  cached = null;
-}
-
-export function getModel(): string {
-  return getActiveLLMConfig().model;
-}
 
 export interface LLMCallOptions {
   systemPrompt: string;
@@ -144,48 +63,34 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     feature = "general",
   } = options;
 
-  const openai = getClient();
-  const model = getModel();
-  const startTime = Date.now();
-
-  if (!openai) {
-    throw new Error("AI 教练未配置，请在 AI 管理页添加并激活一个模型");
-  }
-
+  const startedAt = Date.now();
   let response;
-  let callError: string | null = null;
   try {
-    response = await openai.chat.completions.create({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
+    response = await runPiAgent({
+      systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
       temperature,
-      max_tokens: maxTokens,
-      ...(jsonMode
-        ? { response_format: { type: "json_object" } }
-        : {}),
+      maxTokens,
+      timeoutMs: timeout,
+      jsonMode,
     });
   } catch (err) {
-    const durationMs = Date.now() - startTime;
-    callError = err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : String(err);
     logCall({
-      model,
+      model: "pi-agent",
       feature,
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
-      durationMs,
+      durationMs: Date.now() - startedAt,
       success: false,
-      error: callError,
+      error: message,
     });
     throw err;
   }
 
-  const durationMs = Date.now() - startTime;
-  const content = response.choices[0]?.message?.content || "";
-  const truncated = response.choices[0]?.finish_reason === "length";
+  const content = response.content;
+  const truncated = response.truncated;
 
   let parsed: unknown;
   if (jsonMode) {
@@ -207,17 +112,17 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     }
   }
 
-  const promptTokens = response.usage?.prompt_tokens || 0;
-  const completionTokens = response.usage?.completion_tokens || 0;
-  const totalTokens = response.usage?.total_tokens || 0;
+  const promptTokens = response.usage.promptTokens;
+  const completionTokens = response.usage.completionTokens;
+  const totalTokens = response.usage.totalTokens;
 
   logCall({
-    model,
+    model: response.model,
     feature,
     promptTokens,
     completionTokens,
     totalTokens,
-    durationMs,
+    durationMs: response.durationMs,
     success: true,
   });
 
@@ -226,7 +131,7 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMCallResult> {
     parsed,
     truncated,
     usage: { promptTokens, completionTokens, totalTokens },
-    durationMs,
+    durationMs: response.durationMs,
   };
 }
 

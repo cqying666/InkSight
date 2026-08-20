@@ -15,6 +15,9 @@ export interface AIModelFormData {
   baseURL: string;
   apiKey: string;
   model: string;
+  contextWindow: number;
+  maxTokens: number;
+  supportsReasoning: boolean;
   isActive: boolean;
 }
 
@@ -43,6 +46,9 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
   const [baseURL, setBaseURL] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
+  const [contextWindow, setContextWindow] = useState(32768);
+  const [maxTokens, setMaxTokens] = useState(16384);
+  const [supportsReasoning, setSupportsReasoning] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -57,6 +63,9 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
       // 编辑模式下，apiKey 显示空（不回填明文，需重新输入或留空保持不变）
       setApiKey("");
       setModel(initial.model);
+      setContextWindow(initial.contextWindow);
+      setMaxTokens(initial.maxTokens);
+      setSupportsReasoning(initial.supportsReasoning);
       setIsActive(initial.isActive);
     } else {
       setName("");
@@ -64,6 +73,9 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
       setBaseURL(PROVIDER_PRESETS[0].baseURL);
       setApiKey("");
       setModel(PROVIDER_PRESETS[0].model);
+      setContextWindow(32768);
+      setMaxTokens(16384);
+      setSupportsReasoning(false);
       setIsActive(false);
     }
     setErrorMsg("");
@@ -91,6 +103,10 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
       setErrorMsg("请填写名称、供应商、Base URL、模型标识");
       return;
     }
+    if (!Number.isInteger(contextWindow) || contextWindow < 256 || !Number.isInteger(maxTokens) || maxTokens < 256) {
+      setErrorMsg("上下文窗口与最大输出均需为不小于 256 的整数");
+      return;
+    }
     // 编辑模式下，apiKey 可留空（保持不变）；新增模式下必填
     if (!initial && !apiKey.trim()) {
       setErrorMsg("请填写 API Key");
@@ -109,6 +125,9 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
         provider: provider.trim(),
         baseURL: baseURL.trim(),
         model: model.trim(),
+        contextWindow,
+        maxTokens,
+        supportsReasoning,
         isActive,
       };
       // apiKey：新增必填，编辑时仅当用户输入了新值才提交
@@ -256,6 +275,45 @@ export function ModelEditSheet({ open, initial, onClose, onSaved }: Props) {
               className="w-full border-b border-text/[0.12] bg-transparent py-1 font-serif text-base text-text outline-none transition-colors placeholder:text-text-muted/30 focus:border-accent"
             />
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted/70">
+                Pi 上下文窗口
+              </label>
+              <input
+                type="number"
+                min={256}
+                step={256}
+                value={contextWindow}
+                onChange={(e) => setContextWindow(Number(e.target.value))}
+                className="w-full border-b border-text/[0.12] bg-transparent py-1 font-mono text-sm text-text outline-none transition-colors focus:border-accent"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted/70">
+                Pi 最大输出
+              </label>
+              <input
+                type="number"
+                min={256}
+                step={256}
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                className="w-full border-b border-text/[0.12] bg-transparent py-1 font-mono text-sm text-text outline-none transition-colors focus:border-accent"
+              />
+            </div>
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={supportsReasoning}
+              onChange={(e) => setSupportsReasoning(e.target.checked)}
+              className="h-4 w-4 rounded border-text/[0.2] accent-accent"
+            />
+            <span className="font-serif text-sm text-text">允许 Pi Agent 使用低档推理</span>
+          </label>
 
           {/* 启用此模型 */}
           <label className="flex cursor-pointer items-center gap-2 pt-1">

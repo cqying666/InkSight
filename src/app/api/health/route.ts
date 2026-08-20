@@ -28,6 +28,8 @@ export async function GET() {
       llm: llmStatus,
       llmModel,
       llmBaseUrl,
+      llmRuntime: "pi-agent",
+      llmApi: "openai-completions",
     },
     timestamp: new Date().toISOString(),
   });

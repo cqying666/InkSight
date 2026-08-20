@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ModelEditSheet, type AIModelFormData } from "@/components/ai-control/ModelEditSheet";
+import { PasswordResetSheet } from "@/components/ai-control/PasswordResetSheet";
 import { trackEvent } from "@/lib/report/analytics";
 
 /**
@@ -26,6 +27,10 @@ interface AIModelConfig {
   baseURL: string;
   apiKey: string; // 已脱敏
   model: string;
+  piApi: "openai-completions";
+  contextWindow: number;
+  maxTokens: number;
+  supportsReasoning: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -76,6 +81,7 @@ const FEATURE_LABELS: Record<string, string> = {
   "coach-outline": "教练·大纲",
   "coach-synopsis": "教练·细纲",
   "coach-characters": "教练·人物",
+  "coach-outline-agent": "大纲 Agent",
   general: "其他",
 };
 
@@ -135,6 +141,10 @@ export default function AIControlPage() {
   const [accounts, setAccounts] = useState<AccountUser[]>([]);
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
+  // 密码重置
+  const [resetSheetOpen, setResetSheetOpen] = useState(false);
+  const [resetUserId, setResetUserId] = useState("");
+  const [resetUsername, setResetUsername] = useState("");
 
   const reloadAll = useCallback(async () => {
     const [modelsRes, statsRes, logsRes, accountsRes] = await Promise.all([
@@ -182,6 +192,9 @@ export default function AIControlPage() {
       baseURL: m.baseURL,
       apiKey: "",
       model: m.model,
+      contextWindow: m.contextWindow,
+      maxTokens: m.maxTokens,
+      supportsReasoning: m.supportsReasoning,
       isActive: m.isActive,
     });
     setSheetOpen(true);
@@ -272,31 +285,10 @@ export default function AIControlPage() {
     }
   };
 
-  const handleResetPassword = async (u: AccountUser) => {
-    const password = window.prompt(`为账户「${u.username}」设置新密码（至少 4 位）`);
-    if (password === null) return;
-    if (password.length < 4) {
-      alert("密码至少 4 位");
-      return;
-    }
-    try {
-      const res = await fetch(
-        `/api/admin/users?id=${encodeURIComponent(u.id)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password }),
-        }
-      );
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        alert(j?.error || "重置失败");
-        return;
-      }
-      alert("密码已重置");
-    } catch {
-      alert("网络异常");
-    }
+  const handleResetPassword = (u: AccountUser) => {
+    setResetUserId(u.id);
+    setResetUsername(u.username);
+    setResetSheetOpen(true);
   };
 
   if (loading) {
@@ -596,6 +588,14 @@ export default function AIControlPage() {
           onCreate={handleCreateAccount}
         />
       )}
+
+      <PasswordResetSheet
+        open={resetSheetOpen}
+        username={resetUsername}
+        userId={resetUserId}
+        onClose={() => setResetSheetOpen(false)}
+        onSaved={reloadAll}
+      />
     </main>
   );
 }
@@ -659,6 +659,10 @@ function ModelCard({
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[11px] text-text-muted">
             <span>{providerLabel(model.provider)}</span>
             <span>{model.model}</span>
+            <span>Pi Agent</span>
+            <span>{Math.round(model.contextWindow / 1000)}k ctx</span>
+            <span>{Math.round(model.maxTokens / 1000)}k out</span>
+            {model.supportsReasoning && <span>推理</span>}
             <span className="text-text-muted/70">{model.apiKey}</span>
           </div>
           <div className="mt-0.5 truncate font-mono text-[10px] text-text-muted/60">
@@ -738,6 +742,13 @@ function BreakdownCard({
   );
 }
 
+function validatePassword(pwd: string): string | null {
+  if (pwd.length < 6) return "密码至少 6 位";
+  if (!/[a-zA-Z]/.test(pwd)) return "密码需包含字母";
+  if (!/[0-9]/.test(pwd)) return "密码需包含数字";
+  return null;
+}
+
 function AccountCreateSheet({
   error,
   onClose,
@@ -756,9 +767,16 @@ function AccountCreateSheet({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "experience">("experience");
   const [displayName, setDisplayName] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    const pwdErr = validatePassword(password);
+    if (pwdErr) {
+      setLocalError(pwdErr);
+      return;
+    }
+    setLocalError(null);
     onCreate({ username, password, role, displayName: displayName || undefined });
   }
 
@@ -791,14 +809,14 @@ function AccountCreateSheet({
 
         <label className="mb-3 block">
           <span className="mb-1 block text-xs text-text-muted">
-            密码（至少 4 位）
+            密码（至少 6 位，包含字母和数字）
           </span>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={4}
+            minLength={6}
             className="w-full rounded-md border border-text/[0.08] bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent/40 focus:ring-2 focus:ring-accent/20"
           />
         </label>
@@ -829,9 +847,9 @@ function AccountCreateSheet({
           />
         </label>
 
-        {error && (
+        {(localError || error) && (
           <p className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
-            {error}
+            {localError || error}
           </p>
         )}
 
@@ -852,5 +870,29 @@ function AccountCreateSheet({
         </div>
       </form>
     </div>
+  );
+}
+
+function AccountResetPasswordSheet({
+  open,
+  username,
+  userId,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  username: string;
+  userId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  return (
+    <PasswordResetSheet
+      open={open}
+      username={username}
+      userId={userId}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }
