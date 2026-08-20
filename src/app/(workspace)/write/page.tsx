@@ -30,6 +30,13 @@ import type {
   PanelKey,
   ChatMessage,
 } from "@/lib/write/coach-context";
+import {
+  branchCoachSession,
+  ensureCoachSession,
+  loadCoachSession,
+  saveCoachSessionMessages,
+  type CoachSessionSummary,
+} from "@/lib/coach/session-client";
 import { buildIndex, search, type SearchResult } from "@/lib/material/search-tfidf";
 import { loadAllMaterials } from "@/lib/material/catalog";
 import { materialToCoachText } from "@/lib/material/from-analysis";
@@ -69,7 +76,7 @@ const DEFAULT_WIDTH = 420;
 const SNAP_THRESHOLD = 24;
 const SPLIT_STORAGE_KEY = "inksight:write:split-width";
 
-// AI 教练对话历史持久化 key（半隔离：每个面板独立）
+// AI 教练对话历史本地迁移种子；正式会话保存到用户隔离的 SQLite 会话树。
 const COACH_MESSAGES_KEY = "inksight:write:coach-messages";
 
 // 右侧 AI 对话的初始欢迎消息（共享，不随面板切换）
@@ -150,11 +157,47 @@ export default function WritePage() {
     }
     return createInitialChatMessages();
   });
+  const chatMessagesRef = useRef<ChatMessage[]>(chatMessages);
+  const [coachSessions, setCoachSessions] = useState<CoachSessionSummary[]>([]);
+  const [activeCoachSessionId, setActiveCoachSessionId] = useState<string | null>(null);
+  const draftSessionScopeRef = useRef(
+    `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  );
 
   // P0-3：分栏宽度状态
   const [splitWidth, setSplitWidth] = useState(DEFAULT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const coachWorkId = initialWork?.id ?? externalWorkId ?? draftSessionScopeRef.current;
+
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
+
+  // 为当前作品恢复 Pi Agent 对话主线；首次迁移时使用旧 localStorage 作为只读种子。
+  useEffect(() => {
+    if (initialWork === undefined) return;
+    let cancelled = false;
+    void ensureCoachSession(coachWorkId, chatMessagesRef.current)
+      .then((payload) => {
+        if (cancelled) return;
+        setCoachSessions(payload.sessions);
+        setActiveCoachSessionId(payload.session.id);
+        if (payload.messages.length > 0) {
+          setChatMessages(payload.messages);
+        } else {
+          setChatMessages(createInitialChatMessages());
+        }
+      })
+      .catch(() => {
+        // 会话服务暂不可用时保留本地历史，不阻断写作或教练功能。
+        if (!cancelled) setActiveCoachSessionId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [coachWorkId, initialWork]);
 
   // 加载持久化的分栏宽度
   useEffect(() => {
@@ -565,12 +608,53 @@ export default function WritePage() {
   // 更新右侧 AI 对话历史，持久化到 localStorage
   const handleMessagesChange = useCallback((messages: ChatMessage[]) => {
     setChatMessages(messages);
+    chatMessagesRef.current = messages;
     try {
       localStorage.setItem(COACH_MESSAGES_KEY, JSON.stringify(messages));
     } catch {
       // ignore
     }
+    if (activeCoachSessionId) {
+      void saveCoachSessionMessages(activeCoachSessionId, messages).catch(() => {
+        // 服务端持久化失败时，localStorage 仍保留本地恢复点。
+      });
+    }
+  }, [activeCoachSessionId]);
+
+  const handleCoachSessionChange = useCallback(async (sessionId: string) => {
+    try {
+      const payload = await loadCoachSession(sessionId);
+      setActiveCoachSessionId(payload.session.id);
+      const nextMessages = payload.messages.length > 0
+        ? payload.messages
+        : createInitialChatMessages();
+      setChatMessages(nextMessages);
+      chatMessagesRef.current = nextMessages;
+      trackEvent("coach_session_switched", { session_id: payload.session.id });
+    } catch {
+      // 切换失败时停留在当前会话。
+    }
   }, []);
+
+  const handleCoachBranch = useCallback(async () => {
+    if (!activeCoachSessionId) return;
+    try {
+      const payload = await branchCoachSession(
+        activeCoachSessionId,
+        chatMessagesRef.current
+      );
+      setCoachSessions(payload.sessions);
+      setActiveCoachSessionId(payload.session.id);
+      const nextMessages = payload.messages.length > 0
+        ? payload.messages
+        : createInitialChatMessages();
+      setChatMessages(nextMessages);
+      chatMessagesRef.current = nextMessages;
+      trackEvent("coach_session_branched", { session_id: payload.session.id });
+    } catch {
+      // 分支失败时不影响当前会话。
+    }
+  }, [activeCoachSessionId]);
 
   // 将教练回复插入到当前面板编辑器（决策 4：对话内预览 → 一键插入）
   const handleInsertText = useCallback(
@@ -1069,6 +1153,11 @@ export default function WritePage() {
                     messages={chatMessages}
                     onMessagesChange={handleMessagesChange}
                     onInsertText={handleInsertText}
+                    sessions={coachSessions}
+                    activeSessionId={activeCoachSessionId ?? undefined}
+                    onSessionChange={handleCoachSessionChange}
+                    onBranchSession={handleCoachBranch}
+                    agentSessionId={activeCoachSessionId ?? undefined}
                   />
                 </div>
               </>
@@ -1148,6 +1237,11 @@ export default function WritePage() {
                 messages={chatMessages}
                 onMessagesChange={handleMessagesChange}
                 onInsertText={handleInsertText}
+                sessions={coachSessions}
+                activeSessionId={activeCoachSessionId ?? undefined}
+                onSessionChange={handleCoachSessionChange}
+                onBranchSession={handleCoachBranch}
+                agentSessionId={activeCoachSessionId ?? undefined}
               />
             </div>
           </div>

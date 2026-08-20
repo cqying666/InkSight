@@ -46,6 +46,8 @@ export type AnalyticsEventName =
   | "write_view_changed"
   | "coach_message_sent"
   | "coach_text_inserted"
+  | "coach_session_branched"
+  | "coach_session_switched"
   | "stuck_bubble_shown"
   | "guide_analysis_completed"
   | "guide_analysis_failed"

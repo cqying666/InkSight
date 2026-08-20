@@ -8,12 +8,20 @@ import type {
   PanelKey,
   ChatMessage,
 } from "@/lib/write/coach-context";
+import type { CoachSessionSummary } from "@/lib/coach/session-client";
 
 /** 从 AI 管理拉取的模型项 */
 type ModelOption = {
   id: string;
   name: string;
   isActive: boolean;
+};
+
+type OutlineAgentStep = {
+  id: string;
+  label: string;
+  status: "running" | "complete" | "degraded";
+  detail?: string;
 };
 
 const MODEL_STORAGE_KEY = "inksight:workspace:coach:model";
@@ -90,6 +98,13 @@ interface Props {
   /** 是否在浮窗模式（Cmd+K 唤出） */
   overlay?: boolean;
   onClose?: () => void;
+  /** 工作台持久化对话树；浮窗使用独立临时对话，不传此组属性。 */
+  sessions?: CoachSessionSummary[];
+  activeSessionId?: string;
+  onSessionChange?: (sessionId: string) => void;
+  onBranchSession?: () => void;
+  /** 用户隔离的持久化会话 id，用于 Pi provider 的会话亲和与上下文归属。 */
+  agentSessionId?: string;
 }
 
 export function AICoachPanel({
@@ -101,6 +116,11 @@ export function AICoachPanel({
   onInsertText,
   overlay = false,
   onClose,
+  sessions,
+  activeSessionId,
+  onSessionChange,
+  onBranchSession,
+  agentSessionId,
 }: Props) {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -135,6 +155,11 @@ export function AICoachPanel({
   >([]);
   /** 已选关联文档（与引用系统打通） */
   const [linkedPanels, setLinkedPanels] = useState<Set<string>>(new Set());
+  /** 大纲 Agent 的只读工具执行状态（仅本次流式生成期间展示） */
+  const [outlineAgentSteps, setOutlineAgentSteps] = useState<OutlineAgentStep[]>(
+    []
+  );
+  const isOutlineAgent = activePanel === "outline" && !overlay;
 
   // 自动滚动到底部
   useEffect(() => {
@@ -265,6 +290,7 @@ export function AICoachPanel({
       setStreaming(true);
       setStreamContent("");
       setImplicitCount(0);
+      setOutlineAgentSteps([]);
       streamContentRef.current = "";
 
       const fullContext = getContext?.();
@@ -281,8 +307,9 @@ export function AICoachPanel({
       }
 
       // 隐式 RAG：根据用户消息从素材库检索相关素材（Zvec 向量搜索，降级 TF-IDF）
+      // 大纲 Agent 将在服务端以当前用户权限完成同一项只读检索，避免重复请求。
       let implicitReferences: CoachReference[] = [];
-      if (searchMaterials) {
+      if (searchMaterials && !isOutlineAgent) {
         implicitReferences = await searchMaterials(rawContent);
         setImplicitCount(implicitReferences.length);
       }
@@ -290,6 +317,7 @@ export function AICoachPanel({
       trackEvent("coach_message_sent", {
         length: rawContent.length,
         panel: activePanel,
+        agent_mode: isOutlineAgent ? "outline-readonly" : "chat",
         reference_count: selectedReferences.length,
         reference_ids: selectedReferences.map((reference) => reference.id),
         implicit_count: implicitReferences.length,
@@ -343,10 +371,12 @@ export function AICoachPanel({
           context?: typeof context;
           modelId?: string;
           overlay?: boolean;
+          sessionId?: string;
         } = { messages: apiMessages, context };
         if (overlay) reqBody.overlay = true;
         if (modelId) reqBody.modelId = modelId;
-        const resp = await fetch("/api/coach", {
+        if (agentSessionId) reqBody.sessionId = agentSessionId;
+        const resp = await fetch(isOutlineAgent ? "/api/outline-coach" : "/api/coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(reqBody),
@@ -369,15 +399,76 @@ export function AICoachPanel({
 
         const decoder = new TextDecoder();
         let accumulated = "";
+        let eventBuffer = "";
+        let agentError = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          accumulated += chunk;
-          streamContentRef.current = accumulated;
-          setStreamContent(accumulated);
+          if (!isOutlineAgent) {
+            accumulated += chunk;
+            streamContentRef.current = accumulated;
+            setStreamContent(accumulated);
+            continue;
+          }
+
+          eventBuffer += chunk;
+          const events = eventBuffer.split(/\r?\n\r?\n/);
+          eventBuffer = events.pop() ?? "";
+          for (const rawEvent of events) {
+            let eventName = "message";
+            let data = "";
+            for (const line of rawEvent.split(/\r?\n/)) {
+              if (line.startsWith("event:")) eventName = line.slice(6).trim();
+              if (line.startsWith("data:")) data += line.slice(5).trim();
+            }
+            if (!data) continue;
+
+            try {
+              const payload = JSON.parse(data) as {
+                id?: string;
+                label?: string;
+                status?: "complete" | "degraded";
+                detail?: string;
+                delta?: string;
+                message?: string;
+              };
+              if (eventName === "text" && typeof payload.delta === "string") {
+                accumulated += payload.delta;
+                streamContentRef.current = accumulated;
+                setStreamContent(accumulated);
+              } else if (
+                (eventName === "tool_start" || eventName === "tool_end") &&
+                payload.id &&
+                payload.label
+              ) {
+                setOutlineAgentSteps((steps) => {
+                  const nextStep: OutlineAgentStep = {
+                    id: payload.id as string,
+                    label: payload.label as string,
+                    status:
+                      eventName === "tool_start"
+                        ? "running"
+                        : payload.status ?? "complete",
+                    detail: payload.detail,
+                  };
+                  const index = steps.findIndex((step) => step.id === nextStep.id);
+                  if (index < 0) return [...steps, nextStep];
+                  const next = [...steps];
+                  next[index] = nextStep;
+                  return next;
+                });
+              } else if (eventName === "error" && payload.message) {
+                agentError = payload.message;
+              }
+            } catch {
+              // 忽略损坏的 SSE 事件，保留后续可解析的文本和状态。
+            }
+          }
         }
+
+        if (!accumulated && agentError) accumulated = agentError;
 
         const coachMsg: ChatMessage = {
           id: `c-${Date.now()}`,
@@ -419,6 +510,7 @@ export function AICoachPanel({
         setStreamContent("");
         streamContentRef.current = "";
         abortRef.current = null;
+        setOutlineAgentSteps([]);
       }
     },
     [
@@ -435,6 +527,8 @@ export function AICoachPanel({
       modelId,
       selectedSkills,
       linkedPanels,
+      isOutlineAgent,
+      agentSessionId,
     ]
   );
 
@@ -704,8 +798,34 @@ export function AICoachPanel({
           </span>
         </span>
         <span className="font-mono text-[10px] text-text-muted">Coach</span>
+        {sessions && activeSessionId && onSessionChange && (
+          <select
+            value={activeSessionId}
+            onChange={(event) => onSessionChange(event.target.value)}
+            disabled={streaming}
+            aria-label="切换对话分支"
+            className="max-w-[110px] truncate bg-transparent font-mono text-[9px] text-text-muted outline-none disabled:opacity-50"
+          >
+            {sessions.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.parentId ? "↳ " : ""}{session.label}
+              </option>
+            ))}
+          </select>
+        )}
+        {onBranchSession && activeSessionId && (
+          <button
+            type="button"
+            onClick={onBranchSession}
+            disabled={streaming}
+            title="从当前对话创建分支"
+            className="rounded-sm border border-text/[0.08] px-1.5 py-0.5 font-mono text-[9px] text-text-muted transition-colors hover:border-accent-warm/30 hover:text-text disabled:opacity-40"
+          >
+            分支
+          </button>
+        )}
         <span className="ml-auto font-mono text-[9px] text-text-muted/50">
-          AI 教练
+          {isOutlineAgent ? "大纲 Agent · 只读" : "AI 教练"}
         </span>
         {overlay && onClose && (
           <button
@@ -766,8 +886,29 @@ export function AICoachPanel({
           {streaming && (
             <div className="group border-l-2 border-accent-warm/20 bg-bg-soft/60 px-3 py-2">
               <span className="mb-1 block font-mono text-[9px] text-text-muted/60">
-                教练
+                {isOutlineAgent ? "大纲 Agent · 只读" : "教练"}
               </span>
+              {isOutlineAgent && outlineAgentSteps.length > 0 && (
+                <div className="mb-2 space-y-1 border-b border-text/[0.06] pb-2 font-mono text-[9px] text-text-muted">
+                  {outlineAgentSteps.map((step) => (
+                    <div key={step.id} className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          step.status === "running"
+                            ? "h-1.5 w-1.5 animate-pulse rounded-full bg-accent-warm"
+                            : step.status === "degraded"
+                              ? "h-1.5 w-1.5 rounded-full bg-warning"
+                              : "h-1.5 w-1.5 rounded-full bg-success"
+                        }
+                      />
+                      <span>{step.label}</span>
+                      {step.detail && (
+                        <span className="truncate text-text-muted/60">· {step.detail}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               {streamContent ? (
                 <p className="whitespace-pre-wrap font-serif text-[13px] leading-[1.6] text-text">
                   {streamContent}
@@ -860,7 +1001,7 @@ export function AICoachPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="问教练…"
+            placeholder={isOutlineAgent ? "问大纲 Agent…" : "问教练…"}
             rows={1}
             className="w-full resize-none border border-text/[0.10] rounded-lg bg-bg px-3 pb-7 pt-2.5 font-sans text-[13px] text-text outline-none placeholder:text-text-muted/40 focus:border-accent/40"
             style={{ maxHeight: "120px" }}

@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
-import { getActiveLLMConfig } from "@/lib/llm/client";
-import { getModelById } from "@/lib/ai/models";
 import { logCall } from "@/lib/ai/logs";
+import { getSession } from "@/lib/auth/session";
+import { runPiAgent } from "@/lib/pi/agent";
+import { readCoachSession } from "@/lib/coach/session-store";
 import { z } from "zod";
 
 /**
@@ -178,6 +179,7 @@ const CoachRequestSchema = z.object({
     .min(1)
     .max(30),
   modelId: z.string().max(160).optional(),
+  sessionId: z.string().max(160).optional(),
   /** 编辑区空格唤起的浮窗模式：使用允许代写的 system prompt */
   overlay: z.boolean().optional(),
   context: z
@@ -209,6 +211,11 @@ const CoachRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return new Response("未登录", { status: 401 });
+  }
+
   try {
     const parsed = CoachRequestSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -216,18 +223,10 @@ export async function POST(request: NextRequest) {
         status: 400,
       });
     }
-    const { messages, modelId, overlay, context } = parsed.data;
-
-    // 优先使用请求指定的模型，未指定或找不到时回退到激活模型
-    const picked = modelId ? getModelById(modelId) : null;
-    const { apiKey, baseURL, model } = picked
-      ? { apiKey: picked.apiKey, baseURL: picked.baseURL, model: picked.model }
-      : getActiveLLMConfig();
-    if (!apiKey) {
-      return new Response("AI 教练未配置，请在 AI 管理页添加并激活一个模型", {
-        status: 503,
-      });
-    }
+    const { messages, modelId, sessionId, overlay, context } = parsed.data;
+    const trustedSessionId = sessionId && readCoachSession(session.sub, sessionId)
+      ? sessionId
+      : undefined;
 
     // 选择 system prompt：浮窗模式用代写 prompt，否则用面板专属教练 prompt
     const panel = context?.activePanel ?? "draft";
@@ -297,14 +296,6 @@ export async function POST(request: NextRequest) {
       contextHint = `\n\n[创作者当前状态与引用资料]\n${parts.join("\n")}`;
     }
 
-    const apiMessages = [
-      { role: "system", content: systemPrompt + contextHint },
-      ...messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    ];
-
     // 大纲/细纲场景和浮窗代写模式需要更长的结构化输出
     const maxTokens = overlay
       ? 1500
@@ -312,110 +303,68 @@ export async function POST(request: NextRequest) {
         ? 1200
         : 1000;
 
-    const requestStartTime = Date.now();
     const feature = PANEL_FEATURE[panel] ?? "coach";
-
-    const resp = await fetch(`${baseURL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: apiMessages,
-        stream: true,
-        temperature: 0.5,
-        max_tokens: maxTokens,
-        // 请求在最后一个 SSE chunk 中返回 token 用量
-        stream_options: { include_usage: true },
-      }),
-    });
-
-    if (!resp.ok || !resp.body) {
-      const durationMs = Date.now() - requestStartTime;
-      logCall({
-        model,
-        feature,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        durationMs,
-        success: false,
-        error: `AI 服务异常 (${resp.status})`,
-      });
-      return new Response(`AI 服务异常 (${resp.status})`, { status: 502 });
-    }
-
-    // 将 OpenAI SSE 流转换为纯文本流
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
+    const startedAt = Date.now();
+    const abortController = new AbortController();
     const encoder = new TextEncoder();
-    let buffer = "";
-    // 收集最后一个 chunk 中的 usage（stream_options.include_usage）
-    let capturedUsage: {
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-    } | null = null;
-
-    const stream = new ReadableStream({
-      async pull(controller) {
-        const { done, value } = await reader.read();
-        if (done) {
-          const durationMs = Date.now() - requestStartTime;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        void (async () => {
+        try {
+          const result = await runPiAgent({
+            systemPrompt: systemPrompt + contextHint,
+            messages,
+            modelId,
+            temperature: 0.5,
+            maxTokens,
+            timeoutMs: 60_000,
+            sessionId: trustedSessionId,
+            signal: abortController.signal,
+            onTextDelta: (delta) => {
+              try {
+                controller.enqueue(encoder.encode(delta));
+              } catch {
+                // 客户端已取消时忽略后续 token。
+              }
+            },
+          });
           logCall({
-            model,
+            model: result.model,
             feature,
-            promptTokens: capturedUsage?.prompt_tokens ?? 0,
-            completionTokens: capturedUsage?.completion_tokens ?? 0,
-            totalTokens: capturedUsage?.total_tokens ?? 0,
-            durationMs,
+            promptTokens: result.usage.promptTokens,
+            completionTokens: result.usage.completionTokens,
+            totalTokens: result.usage.totalTokens,
+            durationMs: result.durationMs,
             success: true,
           });
-          controller.close();
-          return;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data:")) continue;
-          const data = trimmed.slice(5).trim();
-          if (data === "[DONE]") {
-            const durationMs = Date.now() - requestStartTime;
-            logCall({
-              model,
-              feature,
-              promptTokens: capturedUsage?.prompt_tokens ?? 0,
-              completionTokens: capturedUsage?.completion_tokens ?? 0,
-              totalTokens: capturedUsage?.total_tokens ?? 0,
-              durationMs,
-              success: true,
-            });
-            controller.close();
-            return;
-          }
+        } catch (streamError) {
+          logCall({
+            model: "pi-agent",
+            feature,
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            durationMs: Date.now() - startedAt,
+            success: false,
+            error: streamError instanceof Error ? streamError.message : String(streamError),
+          });
           try {
-            const json = JSON.parse(data);
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              controller.enqueue(encoder.encode(delta));
-            }
-            // 捕获 usage（OpenAI 在最后一个 chunk 中返回，choices 为空数组）
-            if (json.usage) {
-              capturedUsage = json.usage;
-            }
+            controller.enqueue(
+              encoder.encode("\n\n[连接中断，AI 服务暂时不可用，请重试]")
+            );
           } catch {
-            // 跳过不完整的 JSON
+          }
+        } finally {
+          try {
+            controller.close();
+          } catch {
+            // 客户端已取消请求。
           }
         }
+        })();
       },
       cancel() {
-        reader.cancel();
+        abortController.abort();
       },
     });
 
