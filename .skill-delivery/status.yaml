@@ -1,0 +1,33 @@
+schema_version: delivery-status/v1
+skill_name: virtual-intelligent-dev-team
+current_slice:
+  id: slice-001
+  title: "Pi Agent 全量迁移与会话分支"
+  owner: "Technical Trinity"
+  state: implemented_pending_full_build
+  updated_at: "2026-08-20"
+context:
+  project_context: .skill-context/project-context.md
+  quick_slice_brief: .skill-delivery/current-slice.md
+verification:
+  required_commands:
+    - npx tsx tests/outline-agent-tools.ts
+    - npx tsc --noEmit --incremental false
+    - npm run build
+    - npm run test:pi-agent
+    - npm run test:coach-sessions
+    - npm run test:pi-models
+  last_result: partial_pass
+  evidence:
+    - pi-agent runtime contract passed
+    - pi model management contract passed
+    - coach session tree contract passed
+    - outline-agent tool contract passed
+    - no direct OpenAI SDK or Chat Completions call remains in src
+    - production build reaches existing unrelated type error in src/app/api/admin/users/route.ts
+risks:
+  blockers:
+    - existing TypeScript errors in src/app/api/admin/users/route.ts and src/app/api/writing-documents/route.ts block a green full build
+    - npm audit --omit=dev reports a critical protobufjs dependency through Pi AI's @google/genai dependency
+  follow_up:
+    - manually verify the authenticated Pi Agent flow with a configured model

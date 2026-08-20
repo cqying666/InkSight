@@ -12,12 +12,12 @@
 - Primary priority: Phase 0-3 先跑通拆文分析引擎 MVP（单点突破），Phase 4-6 逐步补齐闭环
 
 ## Current System Snapshot
-- Architecture shape: 空项目。当前仅存在落地页 `inksight-landing.html`（参赛用单文件），无任何产品代码、无后端、无数据库。
-- Entry points: 无（待建立）
-- Build and run path: 待定（需选型前端框架、后端框架、数据库、LLM 服务）
+- Architecture shape: Next.js 15 + React 19 + TypeScript 全栈应用；Route Handlers、SQLite（better-sqlite3）、Zvec 本地语义索引与用户隔离已落地。
+- Entry points: 工作区页面位于 `src/app/(workspace)`；AI 管理为 `/ai-control`；统一模型调用位于 `src/lib/llm/client.ts`。
+- Build and run path: `npm run build`；Docker 运行时随 Pi 迁移升级至 Node.js 22.19+。
 - External integrations:
-  - LLM 服务（拆解 / 处方 / 语义搜索 / 情境匹配）— 选型待定
-  - 向量数据库（语义搜索与情境匹配）— 选型待定
+  - Pi Agent Core + Pi AI（拆解 / 处方 / 趋势分类 / 创作教练；模型由本地 AI 管理页配置）
+  - Zvec（语义搜索与情境匹配，本地持久化）
   - 各平台公开榜单数据采集（番茄短篇 / 知乎盐选 / 七猫 / 点众）
   - Google Fonts CDN（落地页已有，产品页可复用）
 
@@ -32,6 +32,14 @@
 | 写后分析反馈循环 | 对创作产出运行拆文引擎、双篇对比、薄弱点→下轮改进目标 | 拆文引擎、创作工作台 | 低 — 复用拆文引擎 |
 | 数据中台 | 拆文数据 / 趋势数据 / 素材数据 / 用户数据的统一存储 | 数据库、向量库 | 中 — 数据模型设计 |
 | 用户行为记录 | 建议采纳、报告导出、素材收藏、趋势关注等事件追踪 | 埋点系统、分析后台 | 低 — 标准实现 |
+
+## Pi Agent Migration Overlay — 2026-08-20
+
+- Target state: 所有模型请求经 `@earendil-works/pi-ai` 的受控模型集合与 `@earendil-works/pi-agent-core` 执行；不再由产品代码直接实例化 OpenAI SDK 或手写 `/chat/completions` 请求。
+- Model management: `ai_models` 保持为管理员配置入口，但扩展为 Pi 模型规格（OpenAI-compatible API、上下文窗口、输出上限、推理能力）；每个配置在请求时映射为隔离的 Pi Provider + Model。
+- Conversation state: Pi Agent 负责回合、流式事件与受限工具；InkSight SQLite 保存用户隔离的会话、消息、父子分支和作品关联，不使用仍在快速演化的 Pi Harness 持久化 API。
+- Compatibility: 固定 Pi `0.84.2`；生产 Node 运行时必须为 `>=22.19`；现有 DeepSeek、OpenAI、OpenCode 等 OpenAI-compatible endpoint 继续通过 Pi 的 OpenAI-completions adapter 接入。
+- Non-goals: 不引入 Pi coding-agent 的文件、Shell、网络工具；不开放第三方扩展；不改变拆文 JSON schema、处方“三不原则”或用户数据隔离边界。
 
 ## Main Risks
 | Risk | Impact | Likelihood | Mitigation |

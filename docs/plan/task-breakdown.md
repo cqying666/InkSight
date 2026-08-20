@@ -161,6 +161,15 @@ Prerequisite: Phase 5 完成，闭环已打通
 
 ---
 
+## Cross-cutting Pi Agent Migration — 2026-08-20
+
+| Phase | Goal | Acceptance criteria |
+|:------|:-----|:--------------------|
+| M1 — Runtime cutover | Pi AI provider/model adapter + Pi Agent wrapper 替代统一 LLM 调用与两条教练流 | 产品代码不存在 `new OpenAI` 或 `/chat/completions`；拆文、处方、趋势分类与教练都经 Pi Agent 执行 |
+| M2 — Pi model management | 将 AI 管理页配置扩展为 Pi 模型规格，并升级运行时 | 管理员可配置 API、上下文窗口、输出上限与推理能力；容器满足 Pi Node 版本要求 |
+| M3 — Conversation tree | 用户隔离的会话、消息与父子分支持久化 | 每篇作品可恢复主会话、创建/切换剧情讨论分支；分支不会串用户或自动改稿 |
+| M4 — Cutover verification | Pi faux provider 合同测试 + 既有回归 | 模型配置、流式文本、JSON schema 调用、会话分支均有自动化验证；全量构建无回归 |
+
 ## Milestones
 | Milestone | Phase | Criteria |
 |:----------|:------|:---------|

@@ -30,6 +30,14 @@
 - Phase 3 仍 in-progress（5/8：T4 阻塞 Supabase / T7/T8 待运营）
 - Blockers: P3-T4/P4-T15 等 Supabase 配置；P3-T7/T8 等运营招募种子用户；趋势模块真实采集器接入需分平台单独合规确认（P4-T2 评估已完成，门禁在"接入"节点前保持）；P6-T10 公开发布前 4 阻塞项（用户协议/投诉通道/处方 prompt 终审/AI 标识）；P6-T5 团队版待个人版稳定（PRD §8.2 第 23-28 周）
 
+## Pi Agent Migration
+
+- Active migration: M1 Runtime cutover + M2 Pi model management + M3 conversation tree
+- Scope: 全部模型调用从直接 OpenAI-compatible SDK / HTTP 改为 Pi AI + Pi Agent；AI 管理页改为 Pi 模型规格；创作教练会话与剧情讨论分支持久化到用户隔离 SQLite。
+- Hard constraints: 固定 Pi `0.84.2`；升级容器至 Node `>=22.19`；不接入 coding-agent 的文件/Shell/网络工具；不自动写入作品。
+- Resume: 先读 `docs/plan/pi-agent-migration.md`，再从 M1 的 provider adapter 与统一调用层开始。
+- Status: M1 Runtime cutover、M2 Pi model management、M3 conversation tree 已实现；M4 自动化合同测试通过，等待既有类型错误清除后完成全量 build 验收。
+
 ## Next Steps
 1. Phase 6 收尾：T2/T3 等 Supabase 后端，T5 独立分支 — 当前阶段 Phase 6 可推进项已全部完成
 2. Phase 4 收尾（仅剩 T15 阻塞 Supabase）：
