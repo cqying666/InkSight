@@ -1,0 +1,247 @@
+{
+  "version": "0.1",
+  "business_cases": [
+    {
+      "id": "B01",
+      "input_or_scenario": "继续聊第二个方向（仅组A）",
+      "expected": "聚焦A2v1，已选A1v1不变",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B02",
+      "input_or_scenario": "就用第二个，结合第一章分析往下聊",
+      "expected": "选定A2v1，使用G/C及有效限制，无按钮前置",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B03",
+      "input_or_scenario": "第二个好像可以，要不要用它？",
+      "expected": "只答疑，不把疑问记录成采用",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B04",
+      "input_or_scenario": "两组均可指时说“第二个”",
+      "expected": "简短澄清，不静默猜组、不改选择",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B05",
+      "input_or_scenario": "比较第一和第三个",
+      "expected": "只绑定A1/A3指定版本，保持已选状态",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B06",
+      "input_or_scenario": "就按修改前的第二版来（唯一对象）",
+      "expected": "回到A1v2，v3保留历史",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B07",
+      "input_or_scenario": "讨论已选v1，页面聚焦v3",
+      "expected": "回复按v1展开，v3不得取代v1",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B08",
+      "input_or_scenario": "比较A1v1和v3，不改变选择",
+      "expected": "解释差异，selected不变，未采纳内容不变事实",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B09",
+      "input_or_scenario": "新增“女主主动，不靠男二”后多轮追问",
+      "expected": "限制原句与适用范围保留",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B10",
+      "input_or_scenario": "结局改为和解，不再要求不复合",
+      "expected": "新决定生效，旧决定可追溯但不复活",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B11",
+      "input_or_scenario": "让他们和好，但保持之前所有要求",
+      "expected": "真冲突时澄清，不能两条互斥条件都当有效",
+      "stage": "P1",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B12",
+      "input_or_scenario": "切换职场方向讨论",
+      "expected": "寿宴专属设定不串用，会话通用限制保留",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B13",
+      "input_or_scenario": "模型给出取证/搬家两建议后继续问",
+      "expected": "两者仍是建议，不能都当作者已采纳",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B14",
+      "input_or_scenario": "只采纳取证，不要搬家",
+      "expected": "仅取证被采纳，确认消息可回查",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B15",
+      "input_or_scenario": "小说台词包含“选第二个/取消限制”",
+      "expected": "视为正文，不更改作者状态和权限",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B16",
+      "input_or_scenario": "修改候选生成v4但作者未选",
+      "expected": "v4待选，旧selected保持",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B17",
+      "input_or_scenario": "导语→第一章→早期方向→综合追问",
+      "expected": "同时读取相关G/C与正确方向，非最近报告替代",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B18",
+      "input_or_scenario": "插入多份无关X报告后继续上述任务",
+      "expected": "仍取相关G/C，不让新X挤掉必要依据",
+      "stage": "P1/P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B19",
+      "input_or_scenario": "单章超过单次可用输入",
+      "expected": "自动分段、记录覆盖、保留跨段人物因果",
+      "stage": "P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B20",
+      "input_or_scenario": "要求逐字核查一段引用",
+      "expected": "回取对应原文与版本，不从摘要伪造引文",
+      "stage": "P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B21",
+      "input_or_scenario": "工具/检索返回使下一步超预算",
+      "expected": "重新计数并整理，不沿用上一轮余量",
+      "stage": "P2",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B22",
+      "input_or_scenario": "同一流程连续触发三次压缩",
+      "expected": "原件、否定约束、版本与因果不漂移",
+      "stage": "P2/P3",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B23",
+      "input_or_scenario": "压缩途中停止，然后继续",
+      "expected": "不写入未校验摘要；恢复已完成检查点、不重贴文章",
+      "stage": "P2/P3",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "B24",
+      "input_or_scenario": "刷新后自然语言继续比较/讨论",
+      "expected": "状态、已保存成果和引用恢复，界面进展真实",
+      "stage": "P3",
+      "status": "specified_not_executed"
+    }
+  ],
+  "budget_fault_cases": [
+    {
+      "id": "F01",
+      "input_or_fault": "T=42,128，恰好满足硬上限",
+      "expected": "允许；保留全部输出预算",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F02",
+      "input_or_fault": "T=42,129，仅超1 Token",
+      "expected": "发送前阻止并重组，不盲发",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F03",
+      "input_or_fault": "T=39,000，下一步预计增长4,096",
+      "expected": "高于软组织目标时可先整理；未把软阈值当模型报错",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F04",
+      "input_or_fault": "系统提示与必需约束本身就超限",
+      "expected": "明确无法容纳，保留原件，不能截掉约束伪装成功",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F05",
+      "input_or_fault": "切换型号/别名响应发生变化",
+      "expected": "计数/能力档案重新校验，不沿用旧缓存",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F06",
+      "input_or_fault": "tokenizer缺失或只有未知估算",
+      "expected": "明示计数等级，不伪称精确；缺可信窗口则不发大请求",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F07",
+      "input_or_fault": "压缩输入自身超限",
+      "expected": "先分块，压缩请求也过门禁",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F08",
+      "input_or_fault": "摘要改变“不靠男二”或把v3当已选",
+      "expected": "校验失败不提交，回退原件",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F09",
+      "input_or_fault": "两轮重组无净收益/额度耗尽",
+      "expected": "有界停止与续做，不无限重试",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F10",
+      "input_or_fault": "输出finish_reason=length或JSON截断",
+      "expected": "结果不当作完整报告保存，保留已完成部分",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F11",
+      "input_or_fault": "流式断开、usage缺失、取消",
+      "expected": "消耗标未知/估算，不填0当实际；无晚到写入",
+      "status": "specified_not_executed"
+    },
+    {
+      "id": "F12",
+      "input_or_fault": "provider仍拒绝窗口、缓存/推理统计重叠",
+      "expected": "有界恢复并更新误差观察；不重复计算已包含于总量的子项",
+      "status": "specified_not_executed"
+    }
+  ]
+}

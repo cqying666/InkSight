@@ -1,0 +1,90 @@
+{
+  "captured_at": "2026-09-15T09:42:24.875Z",
+  "method": "official_demo_tokenizer_and_chat_template; same known 24-token undercount on tiny JSON probe not applied as universal correction",
+  "network_attempts": 0,
+  "scenarios": [
+    {
+      "name": "task_current_snapshot",
+      "estimated_full_message_tokens": 7983,
+      "max_output_parameter": 6000,
+      "input_json_characters": 12315,
+      "payload_sha256": "59ddacd5bd17255a1e28dbcb4931d0282b85ed233d70e2f8c887512ed0175056",
+      "component_token_attribution_estimates_nonadditive": {
+        "latestMessage": 73,
+        "history": 561,
+        "catalog": 6447
+      },
+      "model_visible_messages": 2,
+      "payload_keys": [
+        "model",
+        "messages",
+        "stream",
+        "stream_options",
+        "max_tokens",
+        "temperature",
+        "response_format"
+      ]
+    },
+    {
+      "name": "plan_current_snapshot",
+      "estimated_full_message_tokens": 31181,
+      "max_output_parameter": 1800,
+      "input_json_characters": 55388,
+      "payload_sha256": "fb50330300d5bf2b2caf6f7d8608d3b894c29a01b35e187446d257815b1d8eef",
+      "component_token_attribution_estimates_nonadditive": {
+        "latestRequest": 21,
+        "sources": 95,
+        "constraints": 1,
+        "catalog": 6447,
+        "focusedDirectionId": 26,
+        "selectedDirectionId": 27,
+        "savedDirectionIds": 53,
+        "observed": 1,
+        "remainingDecisions": 1,
+        "context": 23642
+      },
+      "model_visible_messages": 2,
+      "payload_keys": [
+        "model",
+        "messages",
+        "stream",
+        "stream_options",
+        "max_tokens",
+        "temperature",
+        "response_format"
+      ]
+    },
+    {
+      "name": "comparison_minimal_design_example",
+      "estimated_full_message_tokens": 3137,
+      "max_output_parameter": 6000,
+      "input_json_characters": 4177,
+      "payload_sha256": "b28c24096e4296799d7fc849e1b48fcffea437801dd1019c59f2ff95481ba9e8",
+      "component_token_attribution_estimates_nonadditive": {
+        "goal": 19,
+        "currentRequest": 5,
+        "selectedDirectionId": 27,
+        "focusedDirectionId": 26,
+        "constraints": 1,
+        "authorDecisions": 121,
+        "candidates": 2084
+      },
+      "model_visible_messages": 2,
+      "payload_keys": [
+        "model",
+        "messages",
+        "stream",
+        "stream_options",
+        "max_tokens",
+        "temperature",
+        "response_format"
+      ]
+    }
+  ],
+  "limitations": [
+    "Current snapshot replay, not exact historical failed request.",
+    "Minimal comparison is a designed counterfactual, not tested production implementation.",
+    "Numbers are estimates; server formatting/JSON mode may add tokens.",
+    "Component estimates are for attribution and must not be summed as exact total."
+  ]
+}

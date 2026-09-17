@@ -1,0 +1,15 @@
+{
+  "status": "p0_recommendation_not_applied",
+  "requested_model": "deepseek-chat",
+  "observed_response_model": "deepseek-flash",
+  "provider_context_claim": "1M tokens, official declaration not boundary stress tested",
+  "product_window_candidate": 49152,
+  "safety_reserve_candidate": 1024,
+  "growth_reserve_candidate": 4096,
+  "pure_plan_output_reserve": 1800,
+  "content_output_reserve": 6000,
+  "content_hard_input_budget": 42128,
+  "content_target_with_growth": 38032,
+  "counting_method": "official_demo_tokenizer_and_template_estimate",
+  "requires_p1_long_payload_calibration": true
+}

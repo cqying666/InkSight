@@ -1,0 +1,273 @@
+{
+  "note": "开发迭代样例账本，多个版本和重复样例，不计算总体成功率；不是文学质量验收。",
+  "runs": [
+    {
+      "file": "creation-material-live-bounded-quotes-零散脑洞.json",
+      "scenario": "零散脑洞",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "模型调用或结果校验失败，已保留资料与完成结果，请重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "框架来源或名称无效，只能使用本轮检索到的真实框架。"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-diagnostic-职场.json",
+      "scenario": "职场",
+      "status": "complete",
+      "directions": 3,
+      "reports": 0,
+      "error": null,
+      "failedSteps": []
+    },
+    {
+      "file": "creation-material-live-final.json",
+      "scenario": "职场",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "模型调用或结果校验失败，已保留资料与完成结果，请重试。",
+      "failedSteps": [
+        {
+          "label": "理解目标与下一步",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-final.json",
+      "scenario": "亲情",
+      "status": "complete",
+      "directions": 3,
+      "reports": 0,
+      "error": null,
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-final.json",
+      "scenario": "婚恋",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "框架来源或名称无效，只能使用本轮检索到的真实框架。"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "结果格式不完整：directions.0.material.frameworks.0.limitations、directions.1.material.frameworks.0.limitations、directions.2.material.frameworks.0.limitations"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-final.json",
+      "scenario": "零散脑洞",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "模型调用或结果校验失败，已保留资料与完成结果，请重试。",
+      "failedSteps": []
+    },
+    {
+      "file": "creation-material-live-initial.json",
+      "scenario": "职场",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "框架来源或名称无效，只能使用本轮检索到的真实框架。"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-initial.json",
+      "scenario": "亲情",
+      "status": "complete",
+      "directions": 3,
+      "reports": 0,
+      "error": null,
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-initial.json",
+      "scenario": "婚恋",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-initial.json",
+      "scenario": "零散脑洞",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-protocol-fix-零散脑洞.json",
+      "scenario": "零散脑洞",
+      "status": "complete",
+      "directions": 3,
+      "reports": 0,
+      "error": null,
+      "failedSteps": []
+    },
+    {
+      "file": "creation-material-live-provenance-fix-零散脑洞.json",
+      "scenario": "零散脑洞",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "作者虚构设定必须逐字来自作者输入。"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live-scalar-fix-婚恋.json",
+      "scenario": "婚恋",
+      "status": "complete",
+      "directions": 3,
+      "reports": 0,
+      "error": null,
+      "failedSteps": []
+    },
+    {
+      "file": "creation-material-live-scalar-fix-零散脑洞.json",
+      "scenario": "零散脑洞",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "框架引用未包含在成果来源中。"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live.json",
+      "scenario": "职场",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "结果格式不完整：directions.0.material.frameworks.0.limitations、directions.1.material.frameworks.0.limitations、directions.2.material.frameworks.0.limitations"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live.json",
+      "scenario": "亲情",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "执行失败，未保存不完整结果"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "结果格式不完整：directions.0.material.frameworks.0.limitations、directions.1.material.frameworks.0.limitations、directions.2.material.frameworks.0.limitations"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live.json",
+      "scenario": "婚恋",
+      "status": "complete",
+      "directions": 3,
+      "reports": 0,
+      "error": null,
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "结果格式不完整：directions.0.material.frameworks.0.limitations、directions.1.material.frameworks.0.limitations、directions.2.material.frameworks.0.limitations"
+        }
+      ]
+    },
+    {
+      "file": "creation-material-live.json",
+      "scenario": "零散脑洞",
+      "status": "failed",
+      "directions": 0,
+      "reports": 0,
+      "error": "本轮遇到重复失败，已保留完成的结果，请调整要求后重试。",
+      "failedSteps": [
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "结果格式不完整：directions.0.material.frameworks.0.limitations、directions.1.material.frameworks.0.limitations、directions.2.material.frameworks.0.limitations"
+        },
+        {
+          "label": "提炼核心梗与匹配框架",
+          "detail": "结果格式不完整：directions.0.material.frameworks.0.limitations、directions.1.material.frameworks.0.limitations、directions.2.material.frameworks.0.limitations"
+        }
+      ]
+    }
+  ]
+}

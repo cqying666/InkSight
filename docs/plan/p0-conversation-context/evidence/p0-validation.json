@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-09-15T10:07:26.626228+00:00",
+  "p0_delivery_status": "complete_awaiting_user_review",
+  "p1_authorized": false,
+  "product_file_hashes_compared": 186,
+  "changed_product_files": [],
+  "new_product_code_or_test_files": [],
+  "business_scenarios_specified": 24,
+  "fault_scenarios_specified": 12,
+  "future_functionality_test_status": "not_executed",
+  "model_probe_count": 4,
+  "reported_probe_total_tokens": 2338,
+  "arithmetic_checks": "pass",
+  "local_links_checked": 6,
+  "configuration_and_database_access": "read-only; no product service restart or settings changes performed"
+}

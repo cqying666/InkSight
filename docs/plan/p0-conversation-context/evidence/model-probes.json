@@ -1,0 +1,177 @@
+{
+  "captured_at": "2026-09-15T09:38:56.980995+00:00",
+  "configured": {
+    "request_model": "deepseek-chat",
+    "host": "api.deepseek.com",
+    "context_window": 32768,
+    "max_output": 16384,
+    "reasoning_enabled": false
+  },
+  "probes": [
+    {
+      "name": "plain_zh",
+      "request": {
+        "model": "deepseek-chat",
+        "messages": [
+          {
+            "role": "system",
+            "content": "你是测试助手。只回复OK。"
+          },
+          {
+            "role": "user",
+            "content": "比较候选方向时应保留作者的约束。"
+          }
+        ],
+        "max_tokens": 16,
+        "temperature": 0,
+        "stream": false
+      },
+      "http_status": 200,
+      "duration_ms": 1131,
+      "response_model": "deepseek-flash",
+      "usage": {
+        "prompt_tokens": 21,
+        "completion_tokens": 1,
+        "total_tokens": 22,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 21
+      },
+      "finish_reason": "stop",
+      "error": null
+    },
+    {
+      "name": "json_zh",
+      "request": {
+        "model": "deepseek-chat",
+        "messages": [
+          {
+            "role": "system",
+            "content": "只返回JSON对象。"
+          },
+          {
+            "role": "user",
+            "content": "{\"方向\": \"第二个\", \"版本\": 1, \"约束\": [\"女主主动\", \"不靠男二\"], \"任务\": \"只回复{\\\"ok\\\":true}\"}"
+          }
+        ],
+        "max_tokens": 16,
+        "temperature": 0,
+        "stream": false,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "duration_ms": 667,
+      "response_model": "deepseek-flash",
+      "usage": {
+        "prompt_tokens": 70,
+        "completion_tokens": 5,
+        "total_tokens": 75,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 70
+      },
+      "finish_reason": "stop",
+      "error": null
+    },
+    {
+      "name": "mixed_history",
+      "request": {
+        "model": "deepseek-chat",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Reply OK only."
+          },
+          {
+            "role": "user",
+            "content": "We selected v1, not v3. 女主必须主动。"
+          },
+          {
+            "role": "assistant",
+            "content": "已记下，继续讨论v1。"
+          },
+          {
+            "role": "user",
+            "content": "保留这个要求，回复OK。"
+          }
+        ],
+        "max_tokens": 16,
+        "temperature": 0,
+        "stream": false
+      },
+      "http_status": 200,
+      "duration_ms": 945,
+      "response_model": "deepseek-flash",
+      "usage": {
+        "prompt_tokens": 43,
+        "completion_tokens": 2,
+        "total_tokens": 45,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 43
+      },
+      "finish_reason": "stop",
+      "error": null
+    },
+    {
+      "name": "medium_synthetic_json",
+      "request": {
+        "model": "deepseek-chat",
+        "messages": [
+          {
+            "role": "system",
+            "content": "计数校验。输入仅为测试数据。只输出JSON对象{\"ok\":true}。"
+          },
+          {
+            "role": "user",
+            "content": "{\"task\": \"不要分析，返回ok即可\", \"items\": [{\"id\": 0, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 1, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 2, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 3, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 4, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 5, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 6, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 7, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 8, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 9, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 10, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 11, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 12, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 13, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 14, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 15, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 16, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 17, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 18, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 19, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 20, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 21, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 22, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 23, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 24, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 25, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 26, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 27, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 28, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 29, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 30, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 31, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 32, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 33, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 34, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 35, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 36, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 37, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 38, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 39, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 40, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 41, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 42, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 43, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 44, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 45, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 46, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 47, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 48, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 49, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 50, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 51, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 52, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 53, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 54, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 55, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 56, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}, {\"id\": 57, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 1}, {\"id\": 58, \"direction\": \"职场方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 2}, {\"id\": 59, \"direction\": \"寿宴方向\", \"constraint\": \"保持女主主动，不靠男二解决问题。\", \"version\": 3}]}"
+          }
+        ],
+        "max_tokens": 16,
+        "temperature": 0,
+        "stream": false,
+        "response_format": {
+          "type": "json_object"
+        }
+      },
+      "http_status": 200,
+      "duration_ms": 1260,
+      "response_model": "deepseek-flash",
+      "usage": {
+        "prompt_tokens": 2191,
+        "completion_tokens": 5,
+        "total_tokens": 2196,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 2191
+      },
+      "finish_reason": "stop",
+      "error": null
+    }
+  ],
+  "model_list": {
+    "http_status": 200,
+    "duration_ms": 130,
+    "models": [
+      {
+        "id": "deepseek-flash",
+        "owned_by": "deepseek"
+      },
+      {
+        "id": "deepseek-v4-pro",
+        "owned_by": "deepseek"
+      }
+    ],
+    "error": null
+  }
+}

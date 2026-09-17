@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-09-16T00:37:29.155Z",
+  "origin": "http://localhost:3117",
+  "unauthenticated": 401,
+  "crossUserRead": 404,
+  "oversize": 400,
+  "fileOnly": {
+    "status": "waiting",
+    "reports": 0,
+    "directions": 0,
+    "reply": "你希望我如何处理这份资料？是分析正文（如导语、人物、信息差、情节、大概念等），还是从中提炼故事核/核心梗与框架，或用于其他用途？"
+  }
+}

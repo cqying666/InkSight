@@ -1,0 +1,7 @@
+{
+  "stage": "P0",
+  "status": "awaiting_user_acceptance",
+  "next_stage": "P1",
+  "next_stage_authorized": false,
+  "instruction": "Only proceed after user accepts P0 and explicitly requests P1."
+}
