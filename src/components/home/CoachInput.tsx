@@ -28,7 +28,9 @@ export type SkillRef = {
 
 /** 可选技能列表（@ 引用） */
 export const SKILL_OPTIONS: SkillRef[] = [
-  { id: "teardown", label: "拆文" },
+  { id: "teardown", label: "拆解对标文" },
+  { id: "creation", label: "拆解并探索二创方向" },
+  { id: "material", label: "素材转核心梗与框架" },
   { id: "guide", label: "写导语" },
   { id: "outline", label: "大纲生成" },
   { id: "detail-outline", label: "细纲生成" },
@@ -41,9 +43,11 @@ export type CoachInputProps = {
     files?: UploadedFile[],
     model?: string,
     skills?: SkillRef[]
-  ) => void;
+  ) => void | boolean | Promise<void | boolean>;
   quickTags?: { label: string; onClick: () => void }[];
   compact?: boolean;
+  disabled?: boolean;
+  conversation?: boolean;
 };
 
 function formatSize(bytes: number): string {
@@ -74,7 +78,10 @@ export function CoachInput({
   onSubmit,
   quickTags,
   compact = false,
+  disabled = false,
+  conversation = false,
 }: CoachInputProps) {
+  const [submitting, setSubmitting] = useState(false);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -94,7 +101,7 @@ export function CoachInput({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/ai-models");
+        const res = await fetch("/api/creation-models");
         if (!res.ok) return;
         const data: Array<{
           id: string;
@@ -156,11 +163,21 @@ export function CoachInput({
     return () => document.removeEventListener("mousedown", handler);
   }, [skillMenuOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async () => {
+    if (disabled || submitting || parsing) return;
     const trimmed = text.trim();
     if (!trimmed && files.length === 0 && skills.length === 0) return;
-    onSubmit?.(trimmed, files, model, skills);
+    setSubmitting(true);
+    try {
+      const accepted = await onSubmit?.(trimmed, files, model, skills);
+      if (accepted === true) { setText(""); setFiles([]); setSkills([]); }
+    } catch (error) {
+      setParseError(error instanceof Error ? error.message : "发送失败，输入已保留");
+    } finally { setSubmitting(false); }
+  };
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submit();
   };
 
   const handleModelSelect = (id: string) => {
@@ -188,6 +205,7 @@ export function CoachInput({
   const currentModelLabel = currentModel?.name ?? "未配置";
 
   const parseAndAddFiles = async (fileList: File[]) => {
+    if (disabled || submitting || parsing) return;
     setParseError(null);
 
     for (const file of fileList) {
@@ -318,7 +336,7 @@ export function CoachInput({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          className={`relative rounded-2xl border bg-surface transition-all focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/10 ${
+          className={`relative rounded-2xl border bg-surface pb-12 transition-all focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/10 ${
             dragOver ? "border-accent ring-2 ring-accent/20" : "border-text/[0.10]"
           }`}
         >
@@ -372,23 +390,21 @@ export function CoachInput({
               // Enter 发送，Shift+Enter 换行
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                const trimmed = text.trim();
-                if (trimmed || files.length > 0 || skills.length > 0) {
-                  onSubmit?.(trimmed, files, model, skills);
-                  setText("");
-                }
+                void submit();
               }
             }}
             placeholder={placeholder}
-            rows={10}
-            className="w-full resize-none rounded-2xl bg-transparent pb-14 pl-4 pr-32 pt-4 text-base leading-relaxed text-text placeholder:text-text-muted/50 outline-none"
+            disabled={disabled || submitting}
+            aria-label="创作需求"
+            rows={compact ? 3 : 7}
+            className="w-full resize-none rounded-2xl bg-transparent pb-3 pl-4 pr-4 pt-4 text-base leading-relaxed text-text placeholder:text-text-muted/50 outline-none"
           />
 
           {/* 左下角：上传图标 */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={parsing}
+            disabled={parsing || disabled || submitting}
             title={SUPPORTED_FORMAT_HINT}
             aria-label="上传文件"
             className="absolute bottom-3 left-3 flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-all hover:bg-text/5 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
@@ -413,7 +429,7 @@ export function CoachInput({
           </button>
 
           {/* 左下角：@ 技能引用按钮 */}
-          <div ref={skillMenuRef} className="absolute bottom-3 left-12">
+          <div ref={skillMenuRef} className={`absolute bottom-3 left-12 ${conversation ? "hidden" : ""}`}>
             <button
               type="button"
               onClick={() => setSkillMenuOpen((v) => !v)}
@@ -439,6 +455,7 @@ export function CoachInput({
             </button>
             {skillMenuOpen && (
               <div className="absolute bottom-10 left-0 z-20 min-w-[160px] overflow-hidden rounded-lg border border-text/[0.08] bg-surface py-1 shadow-card">
+                <p className="px-3 py-1 text-[10px] text-text-muted">创作会话 · 理解资料与探索方向</p>
                 {SKILL_OPTIONS.map((skill) => {
                   const selected = skills.some((s) => s.id === skill.id);
                   return (
@@ -446,7 +463,7 @@ export function CoachInput({
                       key={skill.id}
                       type="button"
                       onClick={() => handleSkillSelect(skill)}
-                      className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors hover:bg-bg/60 ${
+                      className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors hover:bg-bg/60 ${skill.id === "guide" ? "border-t border-text/10 mt-1 pt-2" : ""} ${
                         selected
                           ? "cursor-not-allowed text-text-muted/40"
                           : "text-text"
@@ -476,7 +493,7 @@ export function CoachInput({
               aria-expanded={modelMenuOpen}
               className="flex h-8 items-center gap-1 rounded-full border border-text/[0.08] bg-bg/60 px-2.5 text-[11px] font-medium text-text/70 transition-all hover:border-accent/30 hover:bg-bg hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
             >
-              <span className="font-mono">{currentModelLabel}</span>
+              <span className="max-w-[100px] truncate font-mono sm:max-w-[180px]">{currentModelLabel}</span>
               <svg
                 width="10"
                 height="10"
@@ -539,7 +556,7 @@ export function CoachInput({
             type="submit"
             aria-label="发送"
             className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-text-inverse transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:bg-text/20 disabled:text-text-muted/50"
-            disabled={!text.trim() && files.length === 0 && skills.length === 0}
+            disabled={disabled || submitting || parsing || (!text.trim() && files.length === 0 && skills.length === 0)}
           >
             <svg
               width="18"

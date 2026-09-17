@@ -8,7 +8,6 @@ import { peekEvents } from "@/lib/report/analytics";
 import { SceneCard } from "@/components/home/SceneCard";
 import { CoachInput } from "@/components/home/CoachInput";
 import { LoopDashboardSection } from "@/components/home/LoopDashboardSection";
-import { createExample, stripFileExtension, upsertExample } from "@/lib/example";
 
 /**
  * 工作台首页 · 正式版
@@ -71,66 +70,16 @@ export default function HomePage() {
     model?: string,
     skills?: { id: string; label: string }[]
   ) => {
-    // 有上传文件时，走拆文流程
-  if (files && files.length > 0) {
-    try {
-      // 原文仅取上传文件内容（用户的提示词属于指令，不应混入小说正文）
-      const combined = files.map((f) => f.text).join("\n\n---\n\n");
-      const title =
-        files.length === 1
-          ? stripFileExtension(files[0].name)
-          : `${stripFileExtension(files[0].name)}等${files.length}篇`;
-      const example = createExample({ title, text: combined });
-      const saved = await upsertExample(example);
-      sessionStorage.setItem(
-        "inksight:pending",
-        JSON.stringify({
-          text: combined,
-          paragraphs: combined.split(/\n\s*\n/).filter(Boolean),
-          fileName: title,
-          ...(saved ? { exampleId: example.id } : {}),
-        })
-      );
-    } catch {
-      // sessionStorage 不可用时静默降级
-    }
-    router.push("/analyzing");
-    return;
-  }
-
-    // 技能路由：优先根据 @ 引用的技能分流
-    const hasSkill = (id: string) => !!skills?.some((s) => s.id === id);
-    if (hasSkill("teardown")) {
-      // 拆文技能：有文本就走分析，没文本去上传页
-      if (text.trim().length >= 100) {
-        try {
-          sessionStorage.setItem(
-            "inksight:pending",
-            JSON.stringify({
-              text: text.trim(),
-              paragraphs: text.trim().split(/\n\s*\n/).filter(Boolean),
-              fileName: "粘贴文本",
-            })
-          );
-          router.push("/analyzing");
-          return;
-        } catch {
-          // ignore
-        }
-      }
-      router.push("/upload");
-      return;
-    }
-    if (hasSkill("guide")) {
-      // 写导语技能：调用导语生成 API，返回 3 候选后跳工作台展示
-      const theme = text.trim() || "未指定题材";
+    const trimmed = text.trim();
+    const sourceFiles = files?.filter((file) => file.text.trim()) ?? [];
+    const runGuideGeneration = async (theme: string) => {
       setGenerating("guide");
       setGenError(null);
       try {
         const res = await fetch("/api/guide-generation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ theme, wordCount: 10000 }),
+          body: JSON.stringify({ theme: theme || "未指定题材", wordCount: 10000 }),
         });
         const json = await res.json();
         if (!res.ok || !json.success) {
@@ -138,7 +87,7 @@ export default function HomePage() {
         }
         sessionStorage.setItem(
           "inksight:generation-pending",
-          JSON.stringify({ type: "guide", data: json.data, createdAt: Date.now() }),
+          JSON.stringify({ type: "guide", data: json.data, createdAt: Date.now() })
         );
         router.push("/write?generating=guide");
       } catch (err) {
@@ -146,6 +95,12 @@ export default function HomePage() {
       } finally {
         setGenerating(null);
       }
+    };
+
+    // 显式 @技能拥有最高优先级，保持已有技能语义。
+    const hasSkill = (id: string) => !!skills?.some((s) => s.id === id);
+    if (hasSkill("guide")) {
+      await runGuideGeneration(trimmed);
       return;
     }
     if (hasSkill("outline")) {
@@ -185,31 +140,23 @@ export default function HomePage() {
       return;
     }
 
-    // 短文本（≤ 500 字）+ 拆解意图关键词 → 走导语专项拆解
-    const GUIDE_MAX_LEN = 500;
-    const trimmed = text.trim();
-    const guideKeywords =
-      trimmed.includes("导语") ||
-      trimmed.includes("开头") ||
-      trimmed.includes("钩子") ||
-      trimmed.includes("拆导");
-    if (guideKeywords && trimmed.length <= GUIDE_MAX_LEN && trimmed.length >= 30) {
-      try {
-        sessionStorage.setItem(
-          "inksight:guide-pending",
-          JSON.stringify({ text: trimmed })
-        );
-      } catch {
-        // ignore
-      }
-      router.push("/analyzing/guide");
-      return;
-    }
+    setGenerating("creation");
+    setGenError(null);
+    try {
+      const response = await fetch("/api/creation-sessions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, files: sourceFiles, modelId: model || undefined,
+          task: hasSkill("material") ? "素材转核心梗与框架" : hasSkill("creation") ? "拆解并探索二创方向" : hasSkill("teardown") ? "拆解对标文" : undefined }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "创建会话失败");
+      router.push(`/creation?id=${encodeURIComponent(result.id)}&start=1`);
+      return true;
+    } catch (error) {
+      setGenError(error instanceof Error ? error.message : "创建会话失败，输入已保留");
+      return false;
+    } finally { setGenerating(null); }
 
-    if (text.includes("拆") || text.includes("分析")) router.push("/upload");
-    else if (text.includes("写") || text.includes("创作")) router.push("/write");
-    else if (text.includes("趋势") || text.includes("题材")) router.push("/trend");
-    else router.push("/write");
   };
 
   if (!mounted || !greeting) {
@@ -239,10 +186,13 @@ export default function HomePage() {
 
         {/* 输入区 */}
         <section className="mb-12 rounded-3xl border border-text/[0.05] bg-surface p-6 shadow-card md:p-8">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-text-muted">从对标故事或生活素材，找到值得写的方向</p><button type="button" onClick={() => router.push("/creation")} className="text-xs text-accent hover:underline">历史创作会话 →</button></div>
           <CoachInput
-            placeholder="可通过@引用技能"
+            placeholder="粘贴经历、对话、脑洞或上传对标文，告诉我想提炼核心梗、比较框架，还是拆解故事…"
+            disabled={!!generating}
             onSubmit={handleSubmit}
           />
+          <p className="mt-3 text-xs leading-6 text-text-muted">素材转核心梗与框架：可直接说“帮我从这组素材提炼三个核心梗，推荐适合的框架”。原始素材、创作要求和你已确定的虚构设定可分段说明。</p>
         </section>
 
         <LoopDashboardSection />
@@ -264,9 +214,9 @@ export default function HomePage() {
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-text/[0.06] bg-surface px-8 py-6 shadow-card">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             <p className="font-serif text-sm text-text">
-              {generating === "guide" ? "正在生成导语候选…" : "正在生成大纲…"}
+              {generating === "creation" ? "正在建立创作会话…" : generating === "guide" ? "正在生成导语候选…" : "正在生成大纲…"}
             </p>
-            <p className="text-xs text-text-muted">通常需要 20-60 秒</p>
+            {generating !== "creation" && <p className="text-xs text-text-muted">通常需要 20-60 秒</p>}
           </div>
         </div>
       )}
