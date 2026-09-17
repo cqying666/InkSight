@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/lib/report/analytics";
-import type { GuideAnalysisResult } from "@/lib/analysis/guide-pipeline";
+import type {
+  GuideAnalysisResult,
+  GuideAnalysisWithDirectionsResult,
+} from "@/lib/analysis/guide-pipeline";
 
 /**
  * 导语专项拆解页
@@ -14,6 +17,13 @@ import type { GuideAnalysisResult } from "@/lib/analysis/guide-pipeline";
 
 interface PendingGuide {
   text: string;
+  mode?: "analysis" | "analysis_with_directions";
+}
+
+function hasDerivativeDirections(
+  value: GuideAnalysisResult
+): value is GuideAnalysisWithDirectionsResult {
+  return "derivativeDirections" in value;
 }
 
 const MAX_RETRIES = 3;
@@ -74,7 +84,10 @@ export default function GuideAnalyzingPage() {
       fetch("/api/guide-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: pending.text }),
+        body: JSON.stringify({
+          text: pending.text,
+          mode: pending.mode ?? "analysis",
+        }),
         signal: controller.signal,
       })
         .then(async (res) => {
@@ -219,6 +232,7 @@ export default function GuideAnalyzingPage() {
   if (!result) return null;
 
   const { guideAnalysis, sentenceAnalysis, guideReview } = result;
+  const directionResult = hasDerivativeDirections(result) ? result : null;
 
   return (
     <main className="min-h-screen bg-bg px-6 py-10 md:px-10">
@@ -310,6 +324,145 @@ export default function GuideAnalyzingPage() {
             </ol>
           )}
         </section>
+
+        {/* 三、核心元素（仅二创模式） */}
+        {directionResult && (
+          <section className="mb-8 rounded-xl border border-text/[0.06] bg-surface p-6">
+            <h2 className="mb-1 font-serif text-base font-semibold text-text">
+              三、可迁移核心元素
+            </h2>
+            <p className="mb-4 font-serif text-xs text-text-muted">
+              提取能跨人物、关系与题材复用的结构机制，而不是照搬原导语细节。
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="钩子机制">
+                {directionResult.coreElements.hookMechanism}
+              </Field>
+              <Field label="主角设置">
+                {directionResult.coreElements.protagonistSetup}
+              </Field>
+              <Field label="冲突发动机">
+                {directionResult.coreElements.conflictEngine}
+              </Field>
+              <Field label="信息差">
+                {directionResult.coreElements.informationGap}
+              </Field>
+              <Field label="痛点承诺">
+                {directionResult.coreElements.painPromise}
+              </Field>
+              <Field label="爽点承诺">
+                {directionResult.coreElements.satisfactionPromise}
+              </Field>
+              <Field label="情绪反差" fullWidth>
+                {directionResult.coreElements.emotionalContrast}
+              </Field>
+            </div>
+            <div className="mt-5">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted/70">
+                句序骨架
+              </div>
+              <ol className="space-y-2">
+                {directionResult.coreElements.sentenceStructure.map((step, i) => (
+                  <li key={i} className="flex gap-3 font-serif text-sm text-text">
+                    <span className="font-mono text-xs text-accent">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </section>
+        )}
+
+        {/* 四、二创方向（仅二创模式） */}
+        {directionResult && (
+          <section className="mb-8 rounded-xl border border-text/[0.06] bg-surface p-6">
+            <h2 className="mb-1 font-serif text-base font-semibold text-text">
+              四、二创方向
+            </h2>
+            <p className="mb-5 font-serif text-xs text-text-muted">
+              每个方向只迁移结构机制，并明确替换项、差异与避雷。
+            </p>
+            <div className="space-y-4">
+              {directionResult.derivativeDirections.map((direction, i) => {
+                const recommended =
+                  directionResult.recommendedDirection.includes(direction.title) ||
+                  direction.title.includes(directionResult.recommendedDirection);
+                return (
+                  <article
+                    key={`${direction.title}-${i}`}
+                    className={`rounded-lg border p-5 ${
+                      recommended
+                        ? "border-accent/30 bg-accent/[0.04]"
+                        : "border-text/[0.06] bg-bg/40"
+                    }`}
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent">
+                          方向 {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <h3 className="mt-1 font-serif text-base font-semibold text-text">
+                          {direction.title}
+                        </h3>
+                      </div>
+                      {recommended && (
+                        <span className="shrink-0 rounded-full bg-accent/10 px-2 py-1 font-mono text-[10px] text-accent">
+                          推荐
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <Field label="新核心梗">
+                        {direction.newCorePremise}
+                      </Field>
+                      <Field label="迁移机制">
+                        {direction.transferableMechanism}
+                      </Field>
+                      <div>
+                        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted/70">
+                          元素替换
+                        </div>
+                        <ul className="space-y-1">
+                          {direction.replaceableElements.map((item, itemIndex) => (
+                            <li
+                              key={itemIndex}
+                              className="flex gap-2 font-serif text-sm text-text"
+                            >
+                              <span className="text-accent">·</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <Field label="起手蓝图">
+                        {direction.openingBlueprint}
+                      </Field>
+                      <Field label="实质差异">
+                        {direction.differentiation}
+                      </Field>
+                      <div className="rounded-md bg-danger/[0.06] px-3 py-2">
+                        <Field label="风险 / 避雷">{direction.risk}</Field>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="mt-5 rounded-lg border-l-4 border-accent bg-bg/60 p-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted/70">
+                推荐方向
+              </div>
+              <p className="mt-1 font-serif text-sm font-semibold text-text">
+                {directionResult.recommendedDirection}
+              </p>
+              <p className="mt-1 font-serif text-xs leading-relaxed text-text-muted">
+                {directionResult.recommendationReason}
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* 底部操作 */}
         <div className="flex flex-col items-center gap-3">
