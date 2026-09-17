@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { callLLMWithSchema } from "@/lib/llm/client";
+import { getSession } from "@/lib/auth/session";
 import {
   DETAILED_OUTLINE_GENERATION_SYSTEM_PROMPT,
   buildDetailedOutlineGenerationUserPrompt,
@@ -15,6 +16,17 @@ import type { DetailedOutlineResult } from "@/lib/write/scene";
  */
 
 export const maxDuration = 120;
+
+async function requireAuth(): Promise<Response | null> {
+  let session;
+  try {
+    session = await getSession();
+  } catch {
+    return NextResponse.json({ error: "鉴权失败" }, { status: 500 });
+  }
+  if (!session) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  return null;
+}
 
 const InputSchema = z.object({
   /** 大纲文本，可为结构化 JSON 字符串或可读文本 */
@@ -70,6 +82,8 @@ function validate(data: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const inputResult = InputSchema.safeParse(body);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchVector } from "@/lib/material/zvec-index";
+import { getSession } from "@/lib/auth/session";
 import type { SearchOpts } from "@/lib/material/search-tfidf";
 
 /**
@@ -20,6 +21,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { query, opts } = body as {
@@ -34,7 +40,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results = await searchVector(query, opts);
+    const MAX_QUERY_LENGTH = 2000;
+    if (query.length > MAX_QUERY_LENGTH) {
+      return NextResponse.json(
+        { error: `query 不能超过 ${MAX_QUERY_LENGTH} 字符` },
+        { status: 400 }
+      );
+    }
+
+    const results = await searchVector(query, opts, session.sub);
 
     return NextResponse.json({
       results,

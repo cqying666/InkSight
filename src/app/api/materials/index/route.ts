@@ -1,23 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildIndex } from "@/lib/material/zvec-index";
+import { buildIndex, isIndexReady } from "@/lib/material/zvec-index";
+import { getSession } from "@/lib/auth/session";
 
-/**
- * 素材向量索引管理 API
- * POST /api/materials/index — 构建或重建索引
- * GET  /api/materials/index — 检查索引状态
- *
- * 注意：Node.js runtime（非 edge），依赖 Zvec native addon + onnxruntime-node
- * 首次构建时会下载 embedding 模型（~100MB），耗时较长
- */
+async function requireAdmin() {
+  let session;
+  try {
+    session = await getSession();
+  } catch {
+    return NextResponse.json({ error: "鉴权失败" }, { status: 500 });
+  }
+  if (!session) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (session.role !== "admin")
+    return NextResponse.json({ error: "无权限" }, { status: 403 });
+  return session;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await requireAdmin();
+  if (!(auth && "sub" in auth)) return auth as Response;
   try {
-    // 检查索引状态
     return NextResponse.json({
-      ready: true,
+      ready: isIndexReady(),
       message: "索引服务可用",
     });
   } catch (err) {
@@ -31,11 +37,11 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
+  const auth = await requireAdmin();
+  if (!(auth && "sub" in auth)) return auth as Response;
   try {
-    // 构建索引（可能耗时较长，首次需下载模型）
     const result = await buildIndex();
-
     return NextResponse.json({
       success: true,
       ...result,

@@ -3,6 +3,18 @@ import {
   GuideAnalysisInputSchema,
   runGuideAnalysisPipeline,
 } from "@/lib/analysis/guide-pipeline";
+import { getSession } from "@/lib/auth/session";
+
+async function requireAuth(): Promise<Response | null> {
+  let session;
+  try {
+    session = await getSession();
+  } catch {
+    return NextResponse.json({ error: "鉴权失败" }, { status: 500 });
+  }
+  if (!session) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  return null;
+}
 
 /**
  * 导语专项拆解 API
@@ -18,6 +30,8 @@ import {
 export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
+  const denied = await requireAuth();
+  if (denied) return denied;
   try {
     const body = await request.json();
 

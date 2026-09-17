@@ -211,7 +211,12 @@ const CoachRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
+  let session;
+  try {
+    session = await getSession();
+  } catch {
+    return new Response("鉴权失败", { status: 500 });
+  }
   if (!session) {
     return new Response("未登录", { status: 401 });
   }

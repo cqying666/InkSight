@@ -77,7 +77,12 @@ function sendToolEnd(controller: SseController, tool: OutlineAgentToolResult): v
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
+  let session;
+  try {
+    session = await getSession();
+  } catch {
+    return new Response("鉴权失败", { status: 500 });
+  }
   if (!session) return new Response("未登录", { status: 401 });
 
   const parsed = OutlineCoachRequestSchema.safeParse(await request.json());
