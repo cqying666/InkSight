@@ -34,11 +34,11 @@ try {
   assert.throws(() => taskSchema.parse({ ...basePlan, count: 6 }));
   const observations: any[] = [];
   const searches: { query: string; kind: unknown }[] = [];
-  async function run(id: string, options: { count?: number; expectedCount?: number; parentId?: string; noKnowledge?: boolean; guard?: boolean; range?: boolean; wrongParent?: string; repair?: 'success' | 'invalid'; stopDuringMaterial?: boolean; message?: string } = {}) {
+  async function run(id: string, options: { count?: number; expectedCount?: number; parentId?: string; noKnowledge?: boolean; guard?: boolean; check?: 'recover' | 'reject'; range?: boolean; wrongParent?: string; repair?: 'success' | 'invalid' | 'count' | 'missing-reference' | 'method-reference' | 'unknown-reference' | 'invalid-reference'; stopDuringMaterial?: boolean; message?: string } = {}) {
     const state = store.readCreationSession('a', id)!;
     const active = beginCreationRun('a', id, options.message ? { message: options.message } : {});
-    let plans = 0, materialCalls = 0;
-    const count = options.parentId ? 1 : options.expectedCount ?? options.count ?? 3;
+    let plans = 0, materialCalls = 0, checkCalls = 0;
+    const count = options.expectedCount ?? (options.parentId ? 1 : options.count ?? 3);
     const citation = options.noKnowledge ? undefined : options.parentId ? fresh : framework;
     try {
       await runCreationTurn('a', id, active.session.run!.id, active.controller.signal, () => {}, {
@@ -57,23 +57,45 @@ try {
             materialCalls++;
             if(options.repair && materialCalls === 2) {
               assert.ok(input.previousResult);
-              assert.ok(input.formatIssues.some((i:any) => i.path.includes('limitations')));
+              assert.ok(input.formatIssues.some((i:any) => i.path.includes(options.repair === 'count' || options.repair?.includes('reference') ? 'directions' : 'limitations')));
+              if(options.repair?.includes('reference')) assert.match(input.formatIssues[0].message, /框架来源或名称/);
             }
             if(options.stopDuringMaterial) stopCreationRun('a', id);
+            assert.equal(input.executionInstruction, '提炼核心梗，遵守不要重生');
+            if(options.wrongParent) assert.ok(input.previousFailures.some((x:any)=>x.error.includes('修订父版本')));
             assert.equal(input.count, count); assert.equal(input.sources[0].text, options.range ? material.split('\n\n')[0] : material);
             assert.ok(input.constraints.includes('不要重生'));
-            if (options.parentId) { assert.equal(input.parent.id, options.parentId); assert.ok(input.knowledge.some((k: any) => k.id === fresh.id)); assert.ok(!input.knowledge.some((k: any) => k.id === framework.id)); }
+            if (options.parentId && count === 1) { assert.equal(input.parent.id, options.parentId); assert.ok(input.knowledge.some((k: any) => k.id === fresh.id)); assert.ok(!input.knowledge.some((k: any) => k.id === framework.id)); }
+            if(options.parentId && count > 1) { assert.equal(input.parent, undefined); }
             const response = { directions: Array.from({ length: count }, (_, n) => ({ ...candidate(n, citation), ...(options.range ? { material: { ...candidate(n, citation).material, authorSettings: [] } } : {}) })) };
-            if(options.repair && (materialCalls === 1 || options.repair === 'invalid')) response.directions[0].material.frameworks[0].limitations = [];
+            if(options.repair === 'count' && materialCalls === 1) response.directions = response.directions.slice(0, 1);
+            if((options.repair === 'success' || options.repair === 'invalid') && (materialCalls === 1 || options.repair === 'invalid')) response.directions[0].material.frameworks[0].limitations = [];
+            assert.deepEqual(input.frameworkCatalog, citation ? [{id:citation.id,title:citation.title}] : []);
+            if(options.repair?.includes('reference') && (materialCalls === 1 || options.repair === 'invalid-reference')) {
+              response.directions[0].material.frameworks[0].knowledgeIds = options.repair === 'method-reference' ? [method.id]
+                : options.repair === 'unknown-reference' ? ['fabricated-id'] : [];
+            }
             return response;
           }
-          if (feature === 'creation-check') return { passed: true, issues: [] };
+          if (feature === 'creation-material-check') {
+            checkCalls++;
+            assert.equal(input.context, undefined, 'review must not receive old directions or historical messages');
+            assert.equal(input.parent, undefined, 'revision parent is not a review target');
+            assert.equal(input.authorRequest, store.readCreationSession('a', id)!.messages.filter(m=>m.role==='user').at(-1)!.content);
+            assert.ok(Array.isArray(input.authorRequirements));
+            assert.ok(Array.isArray(input.knowledge));
+            if(options.check && checkCalls === 1) return {passed:false,issues:['需要复核的否定意见']};
+            if(options.check) assert.ok(input.previousCheck);
+            return { passed: options.check !== 'reject', issues: options.check === 'reject' ? ['真实的硬约束违反'] : [] };
+          }
           throw new Error(`Unexpected model feature: ${feature}`);
         },
       });
     } finally { active.release(); }
     const result = store.readCreationSession('a', id)!;
-    assert.equal(result.run!.status, options.stopDuringMaterial ? 'stopped' : options.repair === 'invalid' ? 'failed' : 'complete', JSON.stringify(result.run));
+    assert.equal(result.run!.status, options.stopDuringMaterial ? 'stopped' : (options.check === 'reject' || options.repair === 'invalid' || options.repair === 'invalid-reference') ? 'failed' : 'complete', JSON.stringify(result.run));
+    if(result.run!.status === 'complete') assert.equal(plans, 1 + Number(!!options.guard) + Number(!!options.wrongParent), 'successful material delivery ends the turn without asking the planner to generate again');
+    if(options.check) assert.equal(checkCalls, 2);
     if(options.repair) assert.equal(materialCalls, 2, 'one schema repair maximum');
     if(options.stopDuringMaterial) assert.equal(materialCalls, 1);
     return result;
@@ -102,6 +124,19 @@ try {
   assert.equal(revised.knowledge!.find(k => k.kind === 'framework')!.version, 'v2');
   assert.equal(result.directions[0].knowledge!.find(k => k.kind === 'framework')!.version, 'v1');
   assert.ok(result.run!.searches!.some(s => s.query === '亲情 责任 边界' && s.results.some(k => k.id === fresh.id)));
+  const batchSession = create();
+  const initialBatch = await run(batchSession.id);
+  const batchParent = initialBatch.directions[0].id;
+  store.directionAction('a', batchSession.id, 'select', batchParent);
+  const regenerated = await run(batchSession.id, { parentId: batchParent, expectedCount: 3,
+    message: '给我的三个框架本质上都是一样的，都是白眼狼。我需要你生成的三个候选方向都不要一致。' });
+  assert.equal(regenerated.run!.task!.count, 3);
+  assert.equal(regenerated.run!.contextSelection!.mode, 'general');
+  assert.equal(regenerated.directions.length, 6);
+  assert.deepEqual(regenerated.directions.slice(0, 3), initialBatch.directions);
+  assert.ok(regenerated.directions.slice(3).every(d => !d.parentId && d.version === 1));
+  assert.equal(regenerated.selectedDirectionId, batchParent);
+  assert.deepEqual(regenerated.savedDirectionIds, []);
   const ranged = create();
   const rangedResult = await run(ranged.id, { range: true });
   assert.deepEqual(rangedResult.directions[0].material!.sources.map(s => [s.start,s.end]), [[1,1]]);
@@ -132,6 +167,18 @@ try {
   const fallback = create();
   const fallbackResult = await run(fallback.id, { noKnowledge: true });
   assert.ok(fallbackResult.directions.every(d => d.material!.frameworks[0].kind === 'system' && d.knowledge!.length === 0));
+  for(const repair of ['missing-reference', 'method-reference', 'unknown-reference'] as const) {
+    const recovered = await run(create().id, { repair });
+    assert.equal(recovered.directions.length, 3);
+    assert.ok(recovered.directions.every(d => d.material!.frameworks[0].knowledgeIds.includes(framework.id)));
+  }
+  const rejectedReferences = await run(create().id, { repair: 'invalid-reference' });
+  assert.equal(rejectedReferences.directions.length, 0, 'invalid provenance still cannot be saved after repair');
+  assert.match(rejectedReferences.run!.steps.find(s=>s.status==='failed')!.detail!, /缺少框架引用/);
+  assert.equal((await run(create().id, {check:'recover'})).directions.length, 3);
+  assert.equal((await run(create().id, {check:'reject'})).directions.length, 0);
+  const countRepair = await run(create().id, { repair: 'count' });
+  assert.equal(countRepair.directions.length, 3, 'wrong model count is repaired before persistence');
   const repairedSession = create();
   const repairedResult = await run(repairedSession.id, { repair: 'success' });
   assert.equal(repairedResult.directions.length, 3);
