@@ -20,6 +20,13 @@ import type { Role } from "@/lib/auth/constants";
  * PUT    /api/admin/users?id=xxx       — 修改账户（目前仅支持重置密码 { password }）
  */
 
+function validatePassword(pwd: string): string | null {
+  if (pwd.length < 6) return "密码至少 6 位";
+  if (!/[a-zA-Z]/.test(pwd)) return "密码需包含字母";
+  if (!/[0-9]/.test(pwd)) return "密码需包含数字";
+  return null;
+}
+
 async function requireAdmin() {
   const session = await getSession();
   if (!session || session.role !== "admin") {
@@ -57,13 +64,17 @@ export async function POST(request: NextRequest) {
   if (
     typeof username !== "string" ||
     !username.trim() ||
-    typeof password !== "string" ||
-    password.length < 4
+    typeof password !== "string"
   ) {
     return NextResponse.json(
-      { error: "用户名必填，密码至少 4 位" },
+      { error: "用户名必填，密码至少 6 位且需包含字母和数字" },
       { status: 400 }
     );
+  }
+
+  const pwdErr = validatePassword(password);
+  if (pwdErr) {
+    return NextResponse.json({ error: pwdErr }, { status: 400 });
   }
 
   if (role !== "admin" && role !== "experience") {
@@ -100,11 +111,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "id 必填" }, { status: 400 });
   }
 
-  if (id === session.sub) {
-    return NextResponse.json({ error: "不能删除当前登录账户" }, { status: 400 });
-  }
-
-  const res = deleteUser(id);
+  const res = deleteUser(id, session.sub);
   if (!res.ok) {
     return NextResponse.json({ error: res.reason }, { status: 400 });
   }
@@ -123,16 +130,25 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.password !== "string" || body.password.length < 4) {
+  if (!body || typeof body.password !== "string") {
     return NextResponse.json(
-      { error: "新密码至少 4 位" },
+      { error: "新密码必填" },
       { status: 400 }
     );
   }
 
-  const ok = updateUserPassword(id, body.password);
-  if (!ok) {
-    return NextResponse.json({ error: "账户不存在" }, { status: 404 });
+  const pwdErr = validatePassword(body.password);
+  if (pwdErr) {
+    return NextResponse.json(
+      { error: pwdErr },
+      { status: 400 }
+    );
+  }
+
+  const result = updateUserPassword(id, body.password);
+  if (!result.ok) {
+    const status = result.reason === "账户不存在" ? 404 : 400;
+    return NextResponse.json({ error: result.reason }, { status });
   }
   return NextResponse.json({ success: true });
 }

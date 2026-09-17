@@ -19,11 +19,17 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 /**
  * JWT 密钥：
  *  - 优先读取环境变量 INKSIGHT_JWT_SECRET
- *  - 未配置时使用内置默认值（仅适用于本地开发，生产环境必须配置环境变量）
+ *  - 生产环境必须配置，否则启动时抛出错误
+ *  - 开发环境未配置时使用内置默认值（仅限本地开发）
  */
 export function getJwtSecret(): Uint8Array {
-  const secret =
-    process.env.INKSIGHT_JWT_SECRET || "inksight-dev-jwt-secret-change-me-in-production";
+  const secret = process.env.INKSIGHT_JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("生产环境必须配置 INKSIGHT_JWT_SECRET 环境变量");
+    }
+    return new TextEncoder().encode("inksight-dev-jwt-secret-change-me-in-production");
+  }
   return new TextEncoder().encode(secret);
 }
 

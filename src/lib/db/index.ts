@@ -142,12 +142,31 @@ export function getDb(): Database.Database {
     fs.mkdirSync(dbDir, { recursive: true });
   }
   const dbPath = path.join(dbDir, "inksight.db");
-  db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
 
-  initSchema(db);
-  migrateUserDataScoping(db);
+  // 在单独的初始化步骤中创建 db，任何失败都必须关闭句柄并重置模块级变量，
+  // 否则后续调用 getDb() 会命中 `if (db) return db` 而永远返回半初始化的实例。
+  let candidate: Database.Database | null = null;
+  try {
+    candidate = new Database(dbPath);
+    candidate.pragma("journal_mode = WAL");
+    candidate.pragma("foreign_keys = ON");
+
+    initSchema(candidate);
+    migrateUserDataScoping(candidate);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("[db] 初始化失败，已重置以允许后续重试：", e instanceof Error ? e.message : String(e));
+    if (candidate) {
+      try {
+        candidate.close();
+      } catch {
+        // close 失败忽略
+      }
+    }
+    throw e;
+  }
+
+  db = candidate;
 
   if (!dbInitialized) {
     dbInitialized = true;
