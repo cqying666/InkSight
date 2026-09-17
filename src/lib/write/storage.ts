@@ -105,7 +105,7 @@ export async function markDraftCompleted(): Promise<boolean> {
   }
 }
 
-// ===== 作品列表 CRUD =====
+// ===== 作品列表 CRUD（服务端合并，防止多标签页竞态） =====
 
 /** 加载所有作品（按完成时间倒序） */
 export async function loadWorks(): Promise<WorkData[]> {
@@ -124,97 +124,65 @@ export async function loadWorks(): Promise<WorkData[]> {
   }
 }
 
-/** 新增或更新一条作品（按 id upsert） */
+async function postWorksOps(ops: Array<Record<string, unknown>>): Promise<void> {
+  const res = await fetch("/api/writing-documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ops }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `操作失败 (${res.status})`);
+  }
+}
+
+/** 新增或更新一条作品（按 id upsert，服务端合并） */
 export async function upsertWork(work: WorkData): Promise<void> {
   return withWorksLock(async () => {
-    const works = await loadWorks();
-    const idx = works.findIndex((w) => w.id === work.id);
-    if (idx >= 0) {
-      works[idx] = work;
-    } else {
-      works.unshift(work);
-    }
-    await fetch("/api/writing-documents", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: WORKS_KEY, data: works }),
-    });
+    await postWorksOps([{ op: "upsert", work }]);
   });
 }
 
-/** 删除一条作品（按 id） */
+/** 删除一条作品（按 id，服务端合并） */
 export async function deleteWork(id: string): Promise<void> {
   return withWorksLock(async () => {
-    const works = await loadWorks();
-    const filtered = works.filter((w) => w.id !== id);
-    await fetch("/api/writing-documents", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: WORKS_KEY, data: filtered }),
-    });
+    await postWorksOps([{ op: "delete", workId: id }]);
   });
 }
 
 /**
  * 仅更新某条作品的参考文档（对标文/大纲/细纲/人物小传）
- *
- * 用于编辑模式下参考文档的及时保存：保留 title/html/plainText 等其他字段不变，
- * 只覆盖 documents 字段。
+ * 服务端合并，保留其他字段不变
  */
 export async function updateWorkDocuments(
   workId: string,
   documents: WorkspaceDocuments
 ): Promise<void> {
   return withWorksLock(async () => {
-    const works = await loadWorks();
-    const idx = works.findIndex((w) => w.id === workId);
-    if (idx < 0) return;
-    works[idx] = { ...works[idx], documents };
-    await fetch("/api/writing-documents", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: WORKS_KEY, data: works }),
-    });
+    await postWorksOps([{ op: "updateDocuments", workId, documents }]);
   });
 }
 
 /**
  * 更新某条作品的售出信息
- *
- * 标记售出 / 修改售出信息时调用，保留其他字段不变，只覆盖 sale 字段。
+ * 服务端合并，保留其他字段不变
  */
 export async function updateWorkSale(
   workId: string,
   sale: Sale
 ): Promise<void> {
   return withWorksLock(async () => {
-    const works = await loadWorks();
-    const idx = works.findIndex((w) => w.id === workId);
-    if (idx < 0) return;
-    works[idx] = { ...works[idx], sale };
-    await fetch("/api/writing-documents", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: WORKS_KEY, data: works }),
-    });
+    await postWorksOps([{ op: "updateSale", workId, sale }]);
   });
 }
 
 /**
  * 取消某条作品的售出标记（移除 sale 字段）
+ * 服务端合并
  */
 export async function clearWorkSale(workId: string): Promise<void> {
   return withWorksLock(async () => {
-    const works = await loadWorks();
-    const idx = works.findIndex((w) => w.id === workId);
-    if (idx < 0) return;
-    const { sale: _sale, ...rest } = works[idx];
-    works[idx] = rest;
-    await fetch("/api/writing-documents", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: WORKS_KEY, data: works }),
-    });
+    await postWorksOps([{ op: "clearSale", workId }]);
   });
 }
 

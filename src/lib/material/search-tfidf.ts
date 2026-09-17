@@ -75,6 +75,7 @@ export function materialToText(m: Material): string {
   if (m.atom) {
     parts.push(m.atom.text);
     parts.push(m.atom.tags.join(" "));
+    if (m.atom.notes) parts.push(m.atom.notes);
   }
   if (m.component) {
     parts.push(m.component.summary);
@@ -91,6 +92,7 @@ export function materialToText(m: Material): string {
     parts.push(m.inspiration.title);
     parts.push(m.inspiration.text);
     parts.push(m.inspiration.tags.join(" "));
+    if (m.inspiration.notes) parts.push(m.inspiration.notes);
     if (m.inspiration.trendElement) parts.push(m.inspiration.trendElement);
   }
   return parts.join(" ");

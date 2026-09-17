@@ -3,6 +3,10 @@
  *
  * 从 localStorage 迁移到 SQLite（通过 /api/materials API）。
  * 所有函数均为 async，调用方需 await。
+ *
+ * P4-T15 修复：toggleFavorite / setTags / setNotes / setFolder
+ * 改用服务端合并操作（POST /api/materials body.ops），消除
+ * 客户端读-改-写竞态导致的数据丢失。
  */
 
 import type { Material } from "./schema";
@@ -38,6 +42,21 @@ export async function getUserMaterial(
 ): Promise<Material | undefined> {
   const all = await loadUserMaterials();
   return all.find((m) => m.id === materialId);
+}
+
+/** 发送合并操作到服务端 */
+async function postMaterialOps(
+  ops: Array<Record<string, unknown>>
+): Promise<void> {
+  const res = await fetch("/api/materials", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ops }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `操作失败 (${res.status})`);
+  }
 }
 
 function mergeTags(existing: string[] = [], incoming: string[] = []): string[] {
@@ -111,22 +130,32 @@ export async function upsertMaterial(
 }
 
 /**
- * 切换收藏状态
- * @returns 切换后的 favorited 值
+ * 切换收藏状态（单请求原子操作，消除竞态）。
+ *
+ * 行为：
+ *  - 素材已在用户库：服务端事务内原地翻转 favorited。
+ *  - 素材尚未入库（预设 / 提取态首次收藏）：仅当传入 `fallback` 快照时，
+ *    在同一事务里插入一条 favorited=true 的副本。
+ *
+ *  这保证绝无可能出现「先 upsert 未收藏副本 + toggleFavorite 失败」的中间态，
+ *  即不会把用户从未主动保存过的预设素材残留在用户库里。
+ *
+ * @returns 操作是否成功
  */
-export async function toggleFavorite(materialId: string): Promise<boolean> {
-  const all = await loadUserMaterials();
-  const idx = all.findIndex((m) => m.id === materialId);
-  if (idx < 0) return false;
-  const next = !all[idx].favorited;
-  all[idx].favorited = next;
-  all[idx].updatedAt = new Date().toISOString();
-  await fetch("/api/materials", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(all[idx]),
-  });
-  return next;
+export async function toggleFavorite(
+  materialId: string,
+  fallback?: Material
+): Promise<boolean> {
+  try {
+    await postMaterialOps([
+      fallback
+        ? { op: "toggleFavorite", id: materialId, fallback }
+        : { op: "toggleFavorite", id: materialId },
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -150,69 +179,35 @@ export function listFolders(materials: Material[]): string[] {
 }
 
 /**
- * 给素材打标签（覆盖式）
+ * 给素材打标签（覆盖式，服务端合并，消除竞态）
  */
 export async function setTags(materialId: string, tags: string[]): Promise<void> {
-  const all = await loadUserMaterials();
-  const idx = all.findIndex((m) => m.id === materialId);
-  if (idx < 0) return;
-  const m = all[idx];
-  if (m.layer === "atom" && m.atom) m.atom.tags = tags;
-  if (m.layer === "component" && m.component) m.component.tags = tags;
-  if (m.layer === "inspiration" && m.inspiration) m.inspiration.tags = tags;
-  m.updatedAt = new Date().toISOString();
-  await fetch("/api/materials", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(m),
-  });
+  await postMaterialOps([{ op: "setTags", id: materialId, tags }]);
 }
 
 /**
- * 给素材写笔记
+ * 给素材写笔记（服务端合并，消除竞态）
  */
 export async function setNotes(materialId: string, notes: string): Promise<void> {
-  const all = await loadUserMaterials();
-  const idx = all.findIndex((m) => m.id === materialId);
-  if (idx < 0) return;
-  const m = all[idx];
-  if (m.layer === "atom" && m.atom) {
-    (m.atom as typeof m.atom & { notes?: string }).notes = notes;
-  }
-  if (m.layer === "component" && m.component) m.component.notes = notes;
-  if (m.layer === "inspiration" && m.inspiration) {
-    (m.inspiration as typeof m.inspiration & { notes?: string }).notes = notes;
-  }
-  m.updatedAt = new Date().toISOString();
-  await fetch("/api/materials", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(m),
-  });
+  await postMaterialOps([{ op: "setNotes", id: materialId, notes }]);
 }
 
 /**
- * 给素材分配文件夹
+ * 给素材分配文件夹（服务端合并，消除竞态）
  */
 export async function setFolder(
   materialId: string,
   folder: string | undefined
 ): Promise<void> {
-  const all = await loadUserMaterials();
-  const idx = all.findIndex((m) => m.id === materialId);
-  if (idx < 0) return;
-  all[idx].folder = folder;
-  all[idx].updatedAt = new Date().toISOString();
-  await fetch("/api/materials", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(all[idx]),
-  });
+  await postMaterialOps([{ op: "setFolder", id: materialId, folder }]);
 }
 
 /**
- * 清空全部用户素材
+ * 清空全部用户素材（逐条删除，避免全表清空接口）
  */
 export async function clearUserMaterials(): Promise<void> {
-  await fetch("/api/materials", { method: "DELETE" });
+  const all = await loadUserMaterials();
+  for (const m of all) {
+    await removeMaterial(m.id);
+  }
 }

@@ -7,6 +7,7 @@ import {
   keywordFallback,
   loadAllMaterials,
   upsertMaterial,
+  toggleFavorite,
   LAYER_LABEL,
   COMPONENT_KIND_LABEL,
   type Material,
@@ -269,7 +270,9 @@ function RecommendTab({
 
   const handleToggleFav = useCallback(
     async (m: Material) => {
-      await upsertMaterial({ ...m, favorited: !m.favorited });
+      // 单请求原子收藏：服务端事务内完成 upsert+toggle，
+      // 避免两请求竞态导致预设素材残留进用户库。
+      await toggleFavorite(m.id, m);
       onRefresh();
     },
     [onRefresh]

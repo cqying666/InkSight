@@ -89,6 +89,8 @@ export type MaterialOriginValue = z.infer<typeof MaterialOrigin>;
 export const AtomContent = z.object({
   /** 素材文本正文 */
   text: z.string().min(1),
+  /** 用户笔记（与 component.notes 语义对齐，避免 setNotes 写入后被 Zod strip 丢数据） */
+  notes: z.string().optional(),
   /** 用户自定义标签 */
   tags: z.array(z.string()).default([]),
 });
@@ -130,6 +132,8 @@ export const InspirationContent = z.object({
     "what_if", // "如果…会怎样" 假设
     "other",
   ]),
+  /** 用户笔记（与 component.notes 语义对齐，避免 setNotes 写入后被 Zod strip 丢数据） */
+  notes: z.string().optional(),
   /** 关联趋势元素（趋势收藏时填充） */
   trendElement: z.string().optional(),
   /** 用户自定义标签 */

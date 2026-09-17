@@ -135,14 +135,34 @@ export function getReadonlyCollection(): ReturnType<typeof ZVecOpen> {
 // ===== 索引构建 =====
 
 /**
- * 从 SQLite 加载全部素材
+ * 从 SQLite 加载当前登录用户的全部素材（按 userId 命名空间隔离）。
+ *
+ * 命名空间策略与 /api/writing-documents、/api/materials 完全一致：
+ * SQLite 主键 = `u:{userId}:{materialId}`，materialId 本身存于 JSON blob 内且对前端/zvec 透明。
+ * 如果未提供 userId（调用方是管理员批处理），则加载全库。
  */
-function loadMaterialsFromDb(): Material[] {
+function loadMaterialsFromDb(userId?: string): Material[] {
   const db = getDb();
-  const rows = db
-    .prepare("SELECT data FROM materials ORDER BY updated_at DESC")
-    .all() as { data: string }[];
-  return rows.map((r) => JSON.parse(r.data) as Material);
+  let rows: { data: string }[];
+  if (userId) {
+    const prefix = `u:${userId}:`;
+    rows = db
+      .prepare("SELECT data FROM materials WHERE id LIKE ? ORDER BY updated_at DESC")
+      .all(`${prefix}%`) as { data: string }[];
+  } else {
+    rows = db
+      .prepare("SELECT data FROM materials ORDER BY updated_at DESC")
+      .all() as { data: string }[];
+  }
+  const materials: Material[] = [];
+  for (const r of rows) {
+    try {
+      materials.push(JSON.parse(r.data) as Material);
+    } catch {
+      // 跳过损坏的行
+    }
+  }
+  return materials;
 }
 
 export interface BuildIndexResult {
@@ -228,8 +248,9 @@ export async function buildIndex(): Promise<BuildIndexResult> {
 /**
  * 增量更新单条素材的索引
  */
-export async function upsertMaterialIndex(material: Material): Promise<void> {
-  const text = materialToText(material);
+export async function upsertMaterialIndex(material: Record<string, unknown>): Promise<void> {
+  const m = material as Material;
+  const text = materialToText(m);
   if (!text.trim()) return;
 
   const embedding = await embed(text);
@@ -237,11 +258,11 @@ export async function upsertMaterialIndex(material: Material): Promise<void> {
 
   try {
     collection.upsertSync({
-      id: material.id,
+      id: m.id,
       vectors: { [VECTOR_FIELD]: embedding },
       fields: {
-        layer: material.layer,
-        source: material.source,
+        layer: m.layer,
+        source: m.source,
       },
     });
   } catch {
@@ -264,17 +285,21 @@ export function deleteMaterialIndex(materialId: string): void {
 // ===== 向量搜索 =====
 
 /**
- * 向量语义搜索
+ * 向量语义搜索（限定当前用户的素材）
  *
- * @param query 查询文本
- * @param opts 搜索选项（topN、筛选条件）
- * @returns 搜索结果（含素材对象和相似度分数）
+ * 关键隔离：即使 zvec 内有所有用户混合的向量，最后一步从 SQLite 拉详情时仍走
+ * scoped key（`u:{userId}:{id}`），确保：
+ *  1) 他用户素材不会被当前用户读走（即使 id 恰好与 zvec 返回的 unscoped id 相同）
+ *  2) 跨用户同名 unscoped id 不导致串内容
  */
 export async function searchVector(
   query: string,
-  opts?: SearchOpts
+  opts?: SearchOpts,
+  /** 调用方（/api/materials/search）已拿到当前登录 userId，必须传入；未传入则跳过搜索 */
+  userId?: string
 ): Promise<SearchResult[]> {
   if (!query.trim()) return [];
+  if (!userId) return [];
 
   const topN = opts?.topN ?? 20;
   // 多取一些候选，再用筛选条件过滤
@@ -283,7 +308,12 @@ export async function searchVector(
   // 生成 query embedding
   const queryVector = await embed(query);
 
-  const collection = getReadonlyCollection();
+  let collection: ReturnType<typeof ZVecOpen> | null;
+  try {
+    collection = getReadonlyCollection();
+  } catch {
+    return [];
+  }
   const results = collection.querySync({
     fieldName: VECTOR_FIELD,
     vector: queryVector,
@@ -292,18 +322,26 @@ export async function searchVector(
 
   if (!results || results.length === 0) return [];
 
-  // 从 SQLite 加载素材详情（Zvec 只存了 id + 少量标量字段）
+  // 从 SQLite 加载当前用户素材详情；JSON blob 内 id 与 zvec id 都是 unscoped 形式，
+  // 直接按 unscoped id 匹配即可，scoped key 只用于限制 SELECT 的行范围
   const db = getDb();
+  const prefix = `u:${userId}:`;
   const ids = results.map((r) => r.id);
-  const placeholders = ids.map(() => "?").join(",");
+  // WHERE id LIKE 'u:U:%' 先限定命名空间；再通过 JSON_EXTRACT 取出 materialId 做 IN 过滤
+  // 为兼容无 JSON_EXTRACT 的旧 SQLite，这里先把本用户所有行取出来再按 id 映射，
+  // 规模是「单个用户素材数」（千级以下），性能可接受
   const rows = db
-    .prepare(`SELECT id, data FROM materials WHERE id IN (${placeholders})`)
-    .all(...ids) as { id: string; data: string }[];
+    .prepare(`SELECT id, data FROM materials WHERE id LIKE ?`)
+    .all(`${prefix}%`) as { id: string; data: string }[];
 
+  const keep = new Set(ids);
   const materialMap = new Map<string, Material>();
   for (const row of rows) {
     try {
-      materialMap.set(row.id, JSON.parse(row.data) as Material);
+      const parsed = JSON.parse(row.data) as Material & { id: string };
+      if (keep.has(parsed.id)) {
+        materialMap.set(parsed.id, parsed);
+      }
     } catch {
       // 跳过解析失败
     }
@@ -327,7 +365,7 @@ export async function searchVector(
  */
 export function isIndexReady(): boolean {
   try {
-    getCollection();
+    getReadonlyCollection();
     return true;
   } catch {
     return false;

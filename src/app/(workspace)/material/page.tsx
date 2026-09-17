@@ -7,6 +7,7 @@ import {
   search,
   upsertMaterial,
   removeMaterial,
+  toggleFavorite as storageToggleFavorite,
   setTags as storageSetTags,
   setNotes as storageSetNotes,
   setFolder as storageSetFolder,
@@ -208,18 +209,13 @@ export default function MaterialPage() {
     setUserRev((n) => n + 1);
   }, []);
 
-  // 收藏切换
+  // 收藏切换（单请求原子操作，消除竞态，避免预设素材残留）
   const handleToggleFavorite = useCallback(async (material: Material) => {
-    // 必须先 upsert 进 user store（preset/extracted 默认不在 user store 中）
-    const updated = await upsertMaterial({ ...material, favorited: !material.favorited });
-    if (updated) {
-      setMaterials((prev) => {
-        const next = prev.map((m) => (m.id === updated.id ? updated : m));
-        setFolders(listFolders(next));
-        return next;
-      });
-    }
-    if (!material.favorited) {
+    // 首次收藏预设/提取素材时，把整条素材作为 fallback 发给服务端；
+    // 服务端在同一事务里要么「翻转已有条目」，要么「插入 favorited=true 的副本」，
+    // 绝不再出现 upsert 成功但收藏失败导致的「未收藏预设残留在用户库」。
+    const ok = await storageToggleFavorite(material.id, material);
+    if (ok && !material.favorited) {
       trackEvent("material_saved", {
         source: material.source,
         material_type: material.layer,
@@ -230,41 +226,54 @@ export default function MaterialPage() {
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
-  // 标签编辑
+  // 标签编辑（服务端原子操作，消除竞态）
   const handleSetTags = useCallback(async (material: Material, tags: string[]) => {
-    const updated = await upsertMaterial({ ...material, component: material.component ? { ...material.component, tags } : material.component, atom: material.atom ? { ...material.atom, tags } : material.atom, inspiration: material.inspiration ? { ...material.inspiration, tags } : material.inspiration });
-    if (updated) {
-      await storageSetTags(material.id, tags);
-      setMaterials((prev) => {
-        const next = prev.map((m) => (m.id === updated.id ? updated : m));
-        setFolders(listFolders(next));
-        return next;
-      });
-    }
+    await storageSetTags(material.id, tags);
+    setMaterials((prev) => {
+      const next = prev.map((m) =>
+        m.id === material.id
+          ? {
+              ...m,
+              atom: m.atom ? { ...m.atom, tags } : m.atom,
+              component: m.component ? { ...m.component, tags } : m.component,
+              inspiration: m.inspiration ? { ...m.inspiration, tags } : m.inspiration,
+            }
+          : m
+      );
+      setFolders(listFolders(next));
+      return next;
+    });
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
-  // 笔记编辑
+  // 笔记编辑（服务端原子操作，消除竞态）
   const handleSetNotes = useCallback(async (material: Material, notes: string) => {
-    const updated = await upsertMaterial(material);
-    if (updated) {
-      await storageSetNotes(material.id, notes);
-      setMaterials((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    }
+    await storageSetNotes(material.id, notes);
+    setMaterials((prev) =>
+      prev.map((m) =>
+        m.id === material.id
+          ? {
+              ...m,
+              atom: m.atom ? { ...m.atom, notes } : m.atom,
+              component: m.component ? { ...m.component, notes } : m.component,
+              inspiration: m.inspiration ? { ...m.inspiration, notes } : m.inspiration,
+            }
+          : m
+      )
+    );
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
-  // 文件夹分配
+  // 文件夹分配（服务端原子操作，消除竞态）
   const handleSetFolder = useCallback(async (material: Material, folder: string | undefined) => {
-    const updated = await upsertMaterial({ ...material, folder });
-    if (updated) {
-      await storageSetFolder(material.id, folder);
-      setMaterials((prev) => {
-        const next = prev.map((m) => (m.id === updated.id ? { ...m, folder } : m));
-        setFolders(listFolders(next));
-        return next;
-      });
-    }
+    await storageSetFolder(material.id, folder);
+    setMaterials((prev) => {
+      const next = prev.map((m) =>
+        m.id === material.id ? { ...m, folder } : m
+      );
+      setFolders(listFolders(next));
+      return next;
+    });
     reloadUserMaterials();
   }, [reloadUserMaterials]);
 
