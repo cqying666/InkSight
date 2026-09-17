@@ -71,3 +71,6 @@ screenshots/
 .next-material/
 
 .next-retry-ui/
+
+# ===== 技能迭代过程元数据 =====
+.skill-iterations/

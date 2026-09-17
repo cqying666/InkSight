@@ -27,3 +27,12 @@
 - 将本地存储仓库迁移到 Supabase，并加入真实用户隔离与跨设备同步。
 - 把匿名会话级闭环升级为项目实体级闭环，统一 `projectId／analysisId／draftId`。
 - 增加浏览器自动化测试框架，覆盖本地存储配额和多标签页并发。
+
+## 首页意图路由与导语二创契约
+
+- API 输入：`/api/guide-analysis` 接受 `text` 与 `mode: analysis | analysis_with_directions`；缺省 mode 继续兼容旧调用。
+- API 输出：纯分析沿用现有导语结果；二创模式额外返回 `coreElements`、`derivativeDirections`、`recommendedDirection`、`recommendationReason`。
+- 路由优先级：显式 @技能 > 明确自然语言意图 > 内容长度兜底；“生成导语”优先于“分析导语”。
+- 内容边界：上传文件内容天然与指令分离；粘贴混合输入支持“导语/全文/原文如下：”和“指令段落 + 正文段落”的确定性切分。
+- 失败状态：没有可分析内容时回到上传/创作入口；导语二创结果缺少三条方向时由 Schema 触发模型重试。
+- 安全：用户正文始终作为不可信资料；二创只迁移机制，不照搬专属人物、数值、关系和独家表达。

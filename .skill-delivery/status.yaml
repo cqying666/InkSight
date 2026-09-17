@@ -31,3 +31,70 @@ risks:
     - npm audit --omit=dev reports a critical protobufjs dependency through Pi AI's @google/genai dependency
   follow_up:
     - manually verify the authenticated Pi Agent flow with a configured model
+incident_slice:
+  id: slice-localhost-client-exception-20260827
+  title: "localhost client-side exception"
+  owner: "Technical Trinity"
+  state: verified_complete
+  updated_at: "2026-08-27"
+  verification:
+    required_commands:
+      - npm run build
+      - browser login-page smoke test
+    last_result: passed
+    evidence:
+      - running server references webpack-ff2397884358cffe.js
+      - referenced webpack chunk returns HTTP 400
+      - disk build has webpack-7b458671b85d4a7a.js and no BUILD_ID
+      - clean build generated BUILD_ID 9fnxo_tyJLYD8ozfAIwOu
+      - rebuilt webpack runtime returns HTTP 200 JavaScript
+      - login page hydrates with zero browser error logs
+      - TypeScript check and focused regressions passed
+login_incident:
+  id: slice-login-jwt-config-20260827
+  title: "login request reported as network error"
+  owner: "Sentinel Architect (NB)"
+  state: verified_complete
+  updated_at: "2026-08-27"
+  decision: keep
+  evidence:
+    - missing INKSIGHT_JWT_SECRET exception reproduced in the running server log
+    - ignored local JWT secret loaded by the production build
+    - structured signSession error boundary added
+    - protected session verification returned HTTP 200
+    - browser invalid-login state showed the credential error with zero console errors
+
+creation_task_fix:
+  id: creation-task-20260914
+  owner: Technical Trinity
+  state: verified_complete
+  evidence: docs/verification/creation-task-fix.md
+  live_evidence: docs/verification/creation-task-live.json
+  checks: [creation_regressions, typescript, production_build, isolated_live_model, local_http_200]
+
+creation_task_preview_correction:
+  state: verified_complete
+  origin: http://localhost:3107
+  reason: prior_delivery_updated_3000_but_user_was_on_3107
+  evidence: docs/verification/creation-task-browser-3107.json
+  checks: [actual_chrome_submission, identical_request, new_source, completed_report, five_knowledge_citations]
+
+creation_working_memory:
+  state: verified_complete
+  scope: current_session_shared_foundation
+  origin: http://localhost:3107
+  evidence: docs/verification/creation-memory.md
+  checks: [creation_regressions, memory_regressions, typescript, production_build, isolated_live_model, actual_browser]
+  limitations: [model_dependent_context_selection, no_cross_session_memory, no_full_chapter_tool]
+
+creation_material:
+  state: engineering_verified_quality_pending
+  updated_at: "2026-09-16"
+  owner: Technical Trinity
+  workflow: product-spec-deliver
+  origin: http://localhost:3117
+  plan: docs/plan/creation-material-v1.md
+  progress: docs/progress/creation-material-v1.md
+  evidence: docs/verification/creation-material-v1.md
+  checks: [creation_regressions, material_contracts, typescript, isolated_production_build, live_model_samples, browser_flow]
+  limitations: [lexical_retrieval, model_protocol_failures, literary_quality_pending_author_review]
