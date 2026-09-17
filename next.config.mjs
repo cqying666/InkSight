@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Isolate verification builds from any running local preview.
+  distDir: process.env.INKSIGHT_NEXT_DIST_DIR || '.next',
   // 生产环境移除 console.*（保留 console.error）
   compiler: {
     removeConsole:

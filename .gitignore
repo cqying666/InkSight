@@ -12,6 +12,7 @@ node_modules/
 
 # ===== 构建产物 =====
 .next/
+.next-creation/
 out/
 build/
 dist/
@@ -64,3 +65,9 @@ screenshots/
 # ===== 技能/工具内部元数据 =====
 .roundtable-memory/
 .skill-harness/
+.next-creation-task-check/
+.next-creation-memory-check/
+
+.next-material/
+
+.next-retry-ui/
