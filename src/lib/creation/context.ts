@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { creationId, CreationError, sourceParagraphs } from './store';
 import type { CreationContextSelection, CreationContextTrace, CreationSession, CreationReport, CreationMessage } from './types';
+import { candidateBatches } from './batches';
 
 export const contextSelectionSchema=z.object({
   goal:z.string().min(1).max(2000), mode:z.enum(['analysis','discussion','revision','general']),
@@ -36,7 +37,9 @@ export function reportSourceIds(r:CreationReport) {
 const status=(s:CreationSession,id:string)=>id===s.selectedDirectionId?'selected':s.directions.some(d=>d.parentId===id)?'historical':'candidate';
 /** All objects are indexed by identity; age is not an eligibility filter. No cross-session reads. */
 export function contextCatalog(s:CreationSession) {
+  const batches=candidateBatches(s);
   return {
+    candidateBatches:batches,latestCandidateBatchId:batches.at(-1)?.id,
     constraints:s.constraints,selectedDirectionId:s.selectedDirectionId,focusedDirectionId:s.focusedDirectionId,
     sources:s.sources.map(src=>({id:src.id,name:src.name,paragraphs:sourceParagraphs(src).length,preview:src.text.slice(0,180),ending:src.text.slice(-180)})),
     reports:s.reports.map((r,sequence)=>({sequence,id:r.id,scope:r.scope,coverage:r.coverage,sourceIds:reportSourceIds(r),findings:r.findings.map(f=>f.title)})),

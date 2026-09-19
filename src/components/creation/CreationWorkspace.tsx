@@ -113,11 +113,12 @@ export function CreationWorkspace() {
     updateSession(next);
   }, [id, updateSession]);
 
-  const run = useCallback(async (message?: string, files?: UploadedFile[], modelId?: string, retry = false) => {
+  const run = useCallback(async (message?: string, files?: UploadedFile[], modelId?: string, retry = false, onAccepted?: () => void) => {
     if (!id || pendingRequests.current.has(id)) return false;
     pendingRequests.current.add(id);
     setError(''); setStreaming(true);
     let completed = false;
+    let accepted = false;
     try {
       const response = await fetch('/api/creation-agent', json({ sessionId: id, message, files: files?.map(({ name, text }) => ({ name, text })), modelId: modelId || undefined, retry }));
       if (!response.ok || !response.body) {
@@ -128,7 +129,12 @@ export function CreationWorkspace() {
       const events = createCreationEventDecoder((event, payload) => {
         const data = payload as { session?: CreationSession; step?: NonNullable<CreationSession['run']>['steps'][number]; message?: string };
         if (activeId.current !== id) return;
-        if (data.session) updateSession(data.session);
+        if (data.session) {
+          updateSession(data.session);
+          // The initial session event is emitted after the server persists this request.
+          // Acknowledgement is independent from the eventual model result.
+          if (!accepted) { accepted = true; onAccepted?.(); }
+        }
         if (event === 'step' && data.step) { const step = data.step; setSession(previous => previous?.run ? { ...previous, run: { ...previous.run, steps: [...previous.run.steps.filter(item => item.id !== step.id), step] } } : previous); }
         if (event === 'done') completed = true;
         if (event === 'error') throw new Error(data.message || '本轮执行失败');
@@ -144,7 +150,7 @@ export function CreationWorkspace() {
       if (!completed && activeId.current === id) setError('连接已结束，正在同步已保存的执行状态。可根据下方状态继续或重试。');
       return completed;
     } catch (cause) {
-      if (activeId.current === id) setError(cause instanceof Error ? cause.message : '连接中断，输入已保留');
+      if (activeId.current === id) setError(cause instanceof Error ? cause.message : accepted ? '连接中断，已发送的指令保留在会话中' : '发送失败，输入已保留');
       return false;
     } finally {
       pendingRequests.current.delete(id);
@@ -229,6 +235,12 @@ export function CreationWorkspace() {
           {session.messages.map(message => <article key={message.id} className={message.role === 'user' ? 'ml-auto max-w-[90%] rounded-2xl bg-text/[0.04] px-5 py-4' : 'border-l-2 border-accent/40 pl-5'}>
             <p className="mb-3 text-[11px] tracking-widest text-text-muted">{message.role === 'user' ? '你' : 'INKSIGHT · 创作教练'}</p>
             <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>
+            {message.materialAnalysis && <details className="mt-4 rounded-lg border border-text/10 p-4 text-sm leading-7">
+              <summary className="cursor-pointer text-accent">素材分析 · 人物事件、冲突、情绪与潜在吸引力</summary>
+              <dl className="mt-3 space-y-3">{[['人物与事件',message.materialAnalysis.peopleAndEvents],['核心冲突',message.materialAnalysis.coreConflict],['情绪变化',message.materialAnalysis.emotionalProgression]].map(([label,value])=><div key={label}><dt className="text-xs text-text-muted">{label}</dt><dd>{value}</dd></div>)}</dl>
+              <p className="mt-3 text-xs text-text-muted">爆款元素仅作潜在吸引力分析，不保证传播或商业结果。</p>
+              {message.materialAnalysis.appealElements.map((item,index)=><div key={index} className="mt-3"><p>{item.element}：{item.reason}</p><p className="text-xs text-text-muted">适用与局限：{item.limitation}</p></div>)}
+            </details>}
             {message.context && <ContextDetails trace={message.context} session={session} onDetail={setDetail} />}
             {message.reportId && <button className={`${button} mt-4`} onClick={() => openReport(message.reportId!)}>查看完整拆解与依据 →</button>}
             {!!message.directionIds?.length && <div className="mt-5 grid gap-4">{message.directionIds.map(directionId => {
@@ -255,7 +267,7 @@ export function CreationWorkspace() {
       {error && <div role="alert" className="mt-5 rounded-xl border border-danger/20 bg-danger/5 p-4 text-sm text-danger"><p>{error}</p>{id && <button className="mt-2 text-xs underline" onClick={() => { setError(''); void refresh().catch(cause => setError(cause.message)); }}>重新读取状态</button>}</div>}
       {session && !session.run && !streaming && <button className={`${button} mt-5`} onClick={() => void run()}>开始处理这条需求</button>}
     </div>
-    {session && <footer className="sticky bottom-0 z-10 border-t border-text/10 bg-bg/95 px-5 pb-3 pt-4 backdrop-blur"><div className="mx-auto max-w-4xl"><CoachInput compact conversation disabled={!!running || mutating} placeholder={running ? '正在处理本轮需求，可停止后继续讨论…' : focused ? `继续讨论「${focused.title}」，或提出新的调整要求…` : '继续追问、补充资料，或告诉我希望探索怎样的故事方向…'} onSubmit={(message, files, model) => run(message, files, model)} /><p className="text-center text-[10px] text-text-muted">讨论中的候选不会自动写入作品 · 选定与保存由你决定</p></div></footer>}
+    {session && <footer className="sticky bottom-0 z-10 border-t border-text/10 bg-bg/95 px-5 pb-3 pt-4 backdrop-blur"><div className="mx-auto max-w-4xl"><CoachInput compact conversation disabled={!!running || mutating} placeholder={running ? '正在处理本轮需求，可停止后继续讨论…' : focused ? `继续讨论「${focused.title}」，或提出新的调整要求…` : '继续追问、补充资料，或告诉我希望探索怎样的故事方向…'} onSubmit={(message, files, model, _skills, onAccepted) => run(message, files, model, false, onAccepted)} /><p className="text-center text-[10px] text-text-muted">讨论中的候选不会自动写入作品 · 选定与保存由你决定</p></div></footer>}
     {detail && session && <div className="fixed inset-0 z-40 flex justify-end bg-text/20" onClick={() => setDetail(null)}><aside ref={dialog} role="dialog" aria-modal="true" aria-label="成果与依据详情" className="h-full w-full max-w-2xl overflow-y-auto border-l border-text/10 bg-surface p-6 shadow-xl md:p-8" onClick={event => event.stopPropagation()}><div className="mb-6 flex items-center justify-between"><p className="text-xs tracking-widest text-text-muted">创作手记 / 依据与版本</p><button autoFocus className={button} onClick={() => setDetail(null)}>关闭 ×</button></div>
       {detail.type === 'source' && <><h2 className="font-serif text-2xl">{detail.source.name}</h2><p className="mt-2 text-xs text-text-muted">资料版本 {detail.source.version}</p><div className="mt-6 space-y-4">{detail.source.text.split(/\n\s*\n/).map(value => value.trim()).filter(Boolean).map((paragraph, index) => <p key={index} id={`creation-paragraph-${index + 1}`} className={`whitespace-pre-wrap text-sm leading-7 ${detail.paragraph === index + 1 ? 'rounded-lg bg-accent/10 p-3' : ''}`}><span className="mr-3 text-xs text-text-muted">{index + 1}</span>{paragraph}</p>)}</div></>}
       {detail.type === 'report' && <><h2 className="font-serif text-2xl">{detail.report.scope}</h2><p className="mt-3 text-sm leading-6 text-text-muted">阅读覆盖：{detail.report.coverage}</p>{detail.report.limitations.length > 0 && <div className="mt-4 rounded-lg bg-accent/5 p-4 text-xs leading-6">范围与局限：{detail.report.limitations.join('；')}</div>}<ReportSearches report={detail.report} />{detail.report.findings.map((finding, index) => <section key={index} className="mt-7 border-t border-text/10 pt-5"><h3 className="font-serif text-lg">{finding.title}</h3><p className="mt-3 text-sm leading-7"><span className="text-text-muted">原文观察 · </span>{finding.observation}</p><p className="mt-2 text-sm leading-7"><span className="text-text-muted">机制解释 · </span>{finding.mechanism}</p>{finding.evidence.map((evidence, evidenceIndex) => { const source = session.sources.find(item => item.id === evidence.sourceId); return <blockquote key={evidenceIndex} className="mt-3 border-l-2 border-accent/30 bg-bg p-3 text-xs leading-6"><p>“{evidence.quote}”</p><button className="mt-1 text-accent underline" onClick={() => source && setDetail({ type: 'source', source, paragraph: evidence.paragraph })}>{source?.name || '来源不可用'} · 第 {evidence.paragraph} 段 →</button></blockquote>; })}{finding.knowledgeIds.map(knowledgeId => { const knowledge = detail.report.knowledge.find(item => item.id === knowledgeId); return knowledge ? <details key={knowledgeId} className="mt-3 rounded-lg border border-text/10 p-3"><summary className="cursor-pointer text-xs text-accent">参考方法：{knowledge.title}</summary><p className="mt-3 whitespace-pre-wrap text-xs leading-6">{knowledge.text}</p><p className="mt-3 break-all text-[10px] text-text-muted">{knowledge.source} · 版本 {knowledge.version}</p></details> : null; })}</section>)}</>}

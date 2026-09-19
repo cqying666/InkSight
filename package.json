@@ -18,7 +18,7 @@
     "test:home-intent": "tsx --experimental-default-type=module tests/home-intent-guide-contract.ts",
     "seed:synthetic": "tsx scripts/batch-teardown.ts --synthetic 40",
     "baseline:aggregate": "tsx scripts/aggregate-baseline.ts",
-    "test:creation": "tsx --experimental-default-type=module tests/creation-agent.mts && tsx --experimental-default-type=module tests/creation-task.mts && tsx --experimental-default-type=module tests/creation-memory.mts && tsx --experimental-default-type=module tests/creation-knowledge.mts && tsx --experimental-default-type=module tests/creation-material.mts && tsx tests/creation-event-stream.ts && tsx tests/creation-step-presentation.ts",
+    "test:creation": "tsx --experimental-default-type=module tests/creation-agent.mts && tsx --experimental-default-type=module tests/creation-task.mts && tsx --experimental-default-type=module tests/creation-memory.mts && tsx --experimental-default-type=module tests/creation-knowledge.mts && tsx --experimental-default-type=module tests/creation-material.mts && tsx --experimental-default-type=module tests/creation-batches.mts && tsx tests/creation-event-stream.ts && tsx tests/creation-step-presentation.ts",
     "knowledge:import": "tsx scripts/import-creation-knowledge.ts"
   },
   "dependencies": {

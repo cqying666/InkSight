@@ -15,6 +15,7 @@ try {
   const method = { id: 'method', kind: 'method' as const, title: '素材关系提取', source: 'method.md#L3', version: 'v1', text: '分析关系与利益，不只复述事件。' };
   const framework = { id: 'framework', kind: 'framework' as const, title: '职场关键节点', source: 'framework.md#L8', version: 'v1', text: '关键职责被忽视时检查依赖条件。' };
   const fresh = { ...framework, id: 'family-framework', title: '亲情边界', version: 'v2', text: '亲情责任与独立选择。' };
+  const analysis={peopleAndEvents:'员工与主管交接发生署名冲突',coreConflict:'责任与认可错位',emotionalProgression:'受委屈到自主选择',appealElements:[{element:'付出与认可反差',reason:'引发职场共鸣',limitation:'不保证热度，须具体因果'}]};
   const material = '我负责客户交接，但主管把署名给了另一位同事。\n\n作者虚构设定：公司明天关闭。';
   function candidate(n: number, citation: typeof framework | undefined) {
     return {
@@ -53,6 +54,7 @@ try {
             const actions = [...(options.guard ? [{ action: 'finish', message: '已在文本里生成核心梗', waiting: false }] : []), ...(options.wrongParent ? [{action:'directions', instruction:'故意指定另一候选', parentId:options.wrongParent}] : []), { action: 'directions', instruction: '提炼核心梗，遵守不要重生', ...(options.parentId ? { parentId: options.parentId } : {}) }, { action: 'finish', message: '结构化候选已提供', waiting: false }];
             return actions[plans++];
           }
+          if(feature==='creation-novelty-plan') return {plans:Array.from({length:count},(_,i)=>({causalEngine:`新机制${i}`,protagonistChoice:'公开制定合作规则',consequence:'多方谈判达成新的权责',emotionalGoal:'成长',differenceFromHistory:'共同改革而非撤回资源'}))};
           if (feature === 'creation-material') {
             materialCalls++;
             if(options.repair && materialCalls === 2) {
@@ -61,13 +63,20 @@ try {
               if(options.repair?.includes('reference')) assert.match(input.formatIssues[0].message, /框架来源或名称/);
             }
             if(options.stopDuringMaterial) stopCreationRun('a', id);
+            for(const reference of input.context.directions) {
+              assert.equal(reference.context, undefined);
+              assert.equal(reference.knowledge, undefined);
+              assert.equal(reference.createdAt, undefined);
+              assert.equal(reference.material?.sources, undefined);
+            }
             assert.equal(input.executionInstruction, '提炼核心梗，遵守不要重生');
             if(options.wrongParent) assert.ok(input.previousFailures.some((x:any)=>x.error.includes('修订父版本')));
             assert.equal(input.count, count); assert.equal(input.sources[0].text, options.range ? material.split('\n\n')[0] : material);
             assert.ok(input.constraints.includes('不要重生'));
             if (options.parentId && count === 1) { assert.equal(input.parent.id, options.parentId); assert.ok(input.knowledge.some((k: any) => k.id === fresh.id)); assert.ok(!input.knowledge.some((k: any) => k.id === framework.id)); }
             if(options.parentId && count > 1) { assert.equal(input.parent, undefined); }
-            const response = { directions: Array.from({ length: count }, (_, n) => ({ ...candidate(n, citation), ...(options.range ? { material: { ...candidate(n, citation).material, authorSettings: [] } } : {}) })) };
+            const response = { analysis, directions: Array.from({ length: count }, (_, n) => ({ ...candidate(n, citation), ...(options.range ? { material: { ...candidate(n, citation).material, authorSettings: [] } } : {}) })) };
+            if(input.noveltyPolicy?.avoidPrevious) response.directions=response.directions.map((d,n)=>({...d,title:`新组方向${n}`,premise:['她组织行业协会公开评级，让评价权脱离主管','她出资成为客户，由她决定供应商标准','她停止求认同转而培养对方反对的接班人'][n]??`新选择${n}`}));
             if(options.repair === 'count' && materialCalls === 1) response.directions = response.directions.slice(0, 1);
             if((options.repair === 'success' || options.repair === 'invalid') && (materialCalls === 1 || options.repair === 'invalid')) response.directions[0].material.frameworks[0].limitations = [];
             assert.deepEqual(input.frameworkCatalog, citation ? [{id:citation.id,title:citation.title}] : []);
@@ -86,7 +95,7 @@ try {
             assert.ok(Array.isArray(input.knowledge));
             if(options.check && checkCalls === 1) return {passed:false,issues:['需要复核的否定意见']};
             if(options.check) assert.ok(input.previousCheck);
-            return { passed: options.check !== 'reject', issues: options.check === 'reject' ? ['真实的硬约束违反'] : [] };
+            return { passed: options.check !== 'reject', issues: options.check === 'reject' ? ['真实的硬约束违反'] : [], comparisons:input.historicalCandidates?.length?input.candidates.map((d:any,i:number)=>({candidateIndex:i+1,closestPreviousId:input.historicalCandidates[0].id,sameCausalSkeleton:false,differences:[{dimension:'choice',detail:'公开评级而非争署名'},{dimension:'causality',detail:'借行业约束而非内部交接'}]})):[] };
           }
           throw new Error(`Unexpected model feature: ${feature}`);
         },
@@ -137,6 +146,36 @@ try {
   assert.ok(regenerated.directions.slice(3).every(d => !d.parentId && d.version === 1));
   assert.equal(regenerated.selectedDirectionId, batchParent);
   assert.deepEqual(regenerated.savedDirectionIds, []);
+  // Exercise raw provider output: truncation must not consume JSON repair.
+  const transportSession = create();
+  const transportRun = beginCreationRun('a', transportSession.id, {});
+  let rawCalls = 0;
+  try {
+    await runCreationTurn('a', transportSession.id, transportRun.session.run!.id, transportRun.controller.signal, () => {}, {
+      searchKnowledge: () => [method, framework],
+      runModel: async options => {
+        let content: string;
+        let truncated = false;
+        if(options.systemPrompt.includes('识别最新一条用户请求')) content=JSON.stringify({...basePlan,targets:[{kind:'existing',sourceId:transportSession.sources[0].id}]});
+        else if(options.systemPrompt.includes('只能使用下列 JSON 动作')) content=JSON.stringify({action:'directions',instruction:'提炼三个不同方向'});
+        else if(options.systemPrompt.includes('你是短篇素材构思协作者')) {
+          rawCalls++;
+          if(rawCalls===1) {content='{"directions":[';truncated=true;}
+          else if(rawCalls===2) content='{"directions":[],}';
+          else {
+            assert.ok(options.systemPrompt.includes('上次输出超过长度限制'));
+            assert.ok(options.systemPrompt.includes('上次输出不是合法JSON'));
+            content=JSON.stringify({analysis,directions:[0,1,2].map(n=>candidate(n,framework))});
+          }
+        } else content=JSON.stringify({passed:true,issues:[]});
+        return {content,truncated,model:'test',usage:{promptTokens:1,completionTokens:1,totalTokens:2},durationMs:1};
+      },
+    });
+  } finally {transportRun.release();}
+  const transportResult=store.readCreationSession('a',transportSession.id)!;
+  assert.equal(rawCalls,3);
+  assert.equal(transportResult.run!.status,'complete');
+  assert.equal(transportResult.directions.length,3);
   const ranged = create();
   const rangedResult = await run(ranged.id, { range: true });
   assert.deepEqual(rangedResult.directions[0].material!.sources.map(s => [s.start,s.end]), [[1,1]]);
@@ -154,14 +193,14 @@ try {
   const stringConditions: any = candidate(0, framework);
   stringConditions.material.frameworks[0].limitations = '尚缺交接后果；需作者补充';
   stringConditions.material.frameworks[0].prerequisites = '存在真实的责任依赖';
-  const normalizedConditions = materialDirectionsSchema.parse({ directions: [stringConditions] }).directions[0].material.frameworks[0];
+  const normalizedConditions = materialDirectionsSchema.parse({ analysis, directions: [stringConditions] }).directions[0].material.frameworks[0];
   assert.deepEqual(normalizedConditions.limitations, ['尚缺交接后果；需作者补充']);
   assert.deepEqual(normalizedConditions.prerequisites, ['存在真实的责任依赖']);
   for (const field of ['limitations', 'prerequisites']) {
     for (const invalidValue of [[], '']) {
       const invalid = structuredClone(stringConditions);
       invalid.material.frameworks[0][field] = invalidValue;
-      assert.equal(materialDirectionsSchema.safeParse({ directions: [invalid] }).success, false, `${field} cannot be empty`);
+      assert.equal(materialDirectionsSchema.safeParse({ analysis, directions: [invalid] }).success, false, `${field} cannot be empty`);
     }
   }
   const fallback = create();
@@ -191,7 +230,7 @@ try {
   const stoppedResult = await run(repairedSession.id, { stopDuringMaterial: true, message: '再尝试一次' });
   assert.deepEqual(stoppedResult.directions, snapshot, 'late material result cannot persist after stop');
   // Validation is deterministic. Passing a model check does not bypass provenance contracts.
-  const valid = materialDirectionsSchema.parse({ directions: [candidate(0, framework)] }).directions;
+  const valid = materialDirectionsSchema.parse({ analysis, directions: [candidate(0, framework)] }).directions;
   validateMaterialDirections(valid, result, [method, framework], 1);
   assert.throws(() => validateMaterialDirections(valid, result, [method, framework], 2), /数量/);
   assert.throws(() => validateMaterialDirections([valid[0], valid[0]], result, [method, framework], 2), /重复/);

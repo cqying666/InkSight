@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InkSight 初赛参赛帖 — 内容草稿</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+
+  :root {
+    --primary: #1C1C1E;
+    --accent: #7C6F66;
+    --bg: #FAF7F2;
+    --bg-alt: #F3EEE6;
+    --bg-elevated: #FFFFFF;
+    --text: #1C1C1E;
+    --text-muted: #6E6A63;
+    --border: rgba(28,28,30,0.08);
+    --seal-red: #9C4B3C;
+    --warn: #B8894A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+    font-size: 15px;
+  }
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+
+  /* 顶部品牌 */
+  .brand-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 40px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-logo {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--bg);
+    font-family: "Noto Serif SC", serif;
+    font-weight: 800;
+    font-size: 18px;
+  }
+  .brand-text h1 {
+    font-family: "Noto Serif SC", serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .brand-text p {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+  }
+
+  /* 元信息卡 */
+  .meta-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin-bottom: 40px;
+  }
+  .meta-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 0;
+  }
+  .meta-row + .meta-row { border-top: 1px solid var(--border); }
+  .meta-label {
+    flex-shrink: 0;
+    width: 72px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding-top: 2px;
+  }
+  .meta-value {
+    flex: 1;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .tag-pill {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 20px;
+    background: var(--bg-alt);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    margin-right: 6px;
+  }
+
+  /* 章节 */
+  .section {
+    margin-bottom: 48px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .section-num {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--primary);
+    color: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: "Noto Serif SC", serif;
+  }
+  .section-title {
+    font-family: "Noto Serif SC", serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-body {
+    padding-left: 38px;
+  }
+  .section-body p {
+    margin-bottom: 14px;
+  }
+  .section-body strong {
+    font-weight: 600;
+  }
+
+  /* 功能卡片 */
+  .feature-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .feature-card h4 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .feature-icon {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: var(--bg-alt);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .feature-card p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.7;
+  }
+
+  /* 提示框 */
+  .placeholder-box {
+    background: #FFF8F0;
+    border: 1px dashed var(--warn);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--warn);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .placeholder-box::before {
+    content: "!";
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--warn);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 1px;
+  }
+
+  /* 开发阶段 */
+  .phase-block {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .phase-block::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--primary);
+  }
+  .phase-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .phase-name {
+    font-family: "Noto Serif SC", serif;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .phase-tag {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background: #E8F0E8;
+    color: #5B7A5B;
+    font-weight: 600;
+  }
+  .phase-body {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.75;
+  }
+  .phase-body ul {
+    list-style: none;
+    padding: 0;
+  }
+  .phase-body li {
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+  .phase-body li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+
+  /* 复制区 */
+  .copy-block {
+    background: var(--bg-alt);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 20px 0;
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+    position: relative;
+  }
+  .copy-block .copy-label {
+    position: absolute;
+    top: -10px; left: 16px;
+    background: var(--primary);
+    color: var(--bg);
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 8px;
+    font-family: "Noto Sans SC", sans-serif;
+  }
+
+  /* 底部 */
+  .footer-note {
+    margin-top: 48px;
+    padding: 24px;
+    background: var(--bg-alt);
+    border-radius: 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+  .footer-note strong {
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 品牌头 -->
+  <div class="brand-bar">
+    <div class="brand-logo">In</div>
+    <div class="brand-text">
+      <h1>InkSight 创作教练</h1>
+      <p>初赛参赛帖 · 内容草稿</p>
+    </div>
+  </div>
+
+  <!-- 发帖元信息 -->
+  <div class="meta-card">
+    <div class="meta-row">
+      <div class="meta-label">标签</div>
+      <div class="meta-value"><span class="tag-pill">学习工作</span></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-label">标题</div>
+      <div class="meta-value">【学习工作赛道】InkSight — 短篇小说 AI 创作教练</div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-label">赛道</div>
+      <div class="meta-value">学习工作</div>
+    </div>
+  </div>
+
+  <!-- 正文开始 -->
+
+  <!-- 0. 打招呼 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">0</div>
+      <div class="section-title">先和大家打个招呼</div>
+    </div>
+    <div class="section-body">
+      <p>大家好，我做的是 <strong>InkSight</strong>——一个面向短篇小说创作者的 AI 创作教练。</p>
+      <p>起因很简单：2024 年以来短篇赛道爆发，番茄、知乎盐选、七猫、点众都在抢短篇内容，创作者大量涌入但淘汰率极高。我自己身边就有朋友写了三五篇没流量就放弃了，核心问题不是"写不出来"，而是"不知道自己差在哪里"。</p>
+      <p>市面上 AI 写作工具很多，但几乎都在替你写——续写、润色、生成大纲。我想做的恰恰相反：<strong>不替你写，而是像教练一样帮你拆解对手录像、分析战术、制定训练计划，然后看着你上场、赛后复盘。</strong></p>
+      <p>用 TRAE 做这个项目的过程比我预想的顺畅太多。最让我惊讶的是，我只描述了"学—察—集—创—磨"这五个字的产品愿景，TRAE 就帮我把从拆文引擎到创作工作台、从趋势雷达到素材库的完整闭环全部搭建了出来。中间经历的七十几轮任务拆解，每一轮都是我提需求、它实现，配合非常默契。</p>
+    </div>
+  </div>
+
+  <!-- 1. Demo 简介 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-title">Demo 简介</div>
+    </div>
+    <div class="section-body">
+      <p><strong>是什么：</strong>一个网页应用（Web App），短篇小说创作者的 AI 创作教练平台，构建了从拆文学习到创作实践的完整闭环。技术栈为 Next.js + SQLite + Tailwind CSS，采用"奶油炭灰"设计系统（深炭灰主色 + 暖灰褐强调色 + 奶油白背景），营造文学杂志般的克制质感。</p>
+      <p><strong>面向谁：</strong>有写作意愿但缺乏系统方法论的中腰部短篇小说创作者——已在番茄短篇、知乎盐选等平台发表过作品，但卡在中腰部无法突破。拆文靠直觉，改进靠试错。</p>
+
+      <p style="margin-top:20px"><strong>主要功能：</strong></p>
+
+      <div class="feature-card">
+        <h4><span class="feature-icon">🔍</span> 拆文分析引擎 — 三层 14 维度结构化拆解</h4>
+        <p>上传任意短篇小说（支持 txt / docx / pdf 全格式），系统自动进行骨架层（开头钩子 / 三幕结构 / 反转节点 / 结局类型 / 事件密度）、血肉层（情绪曲线 / 对话比 / 感官描写 / 人物弧光 / 冲突层次）、风格层（句式 / 用词 / 视角 / 时态）的深度拆解。生成可视化"X 光片报告"——含总览卡片、情绪曲线双线叠加图、结构图谱、维度详情折叠卡。附带诊断引擎（与同类型基准数据比对，自动识别结构薄弱点）和多方向修改建议（每个薄弱点给 2-3 个方向的处方，遵循"不替写 / 不给唯一答案 / 不评判"三不原则）。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4><span class="feature-icon">✍️</span> 创作工作台 — 从大纲到成稿的一站式写作</h4>
+        <p>三栏布局创作环境：左侧结构大纲（可基于拆文学到的模式自动生成模板）、中间极简编辑器（自动保存 / 字数统计 / 段落编号 / 专注模式）、右侧 AI 对话面板。核心交互亮点：在编辑器空白处<strong>按空格键唤起 AI 对话</strong>，输入描述即可直接生成 200-500 字的场景文本并插入编辑器。底部实时结构提示条显示三幕进度位置、当前段落类型、距计划反转节点的距离——只提醒位置，不评价内容。支持写后一键分析：对完成的作品运行拆文引擎，生成 X 光片报告，与参考作品双篇对比。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4><span class="feature-icon">🔄</span> 完整创作闭环 — 学察集创磨</h4>
+        <p>五个环节自动衔接，创作者不需要在多个工具间来回切换：<strong>学</strong>（拆文分析 → X 光片报告 + 诊断处方）→ <strong>察</strong>（热门元素雷达，趋势热力图 + 题材生命周期标注 + 元素组合推荐）→ <strong>集</strong>（三层素材库，拆文自动提取结构模式 + TF-IDF 语义搜索 + 情境匹配推荐）→ <strong>创</strong>（创作工作台，编辑器 + 大纲 + 素材侧栏 + AI 对话）→ <strong>磨</strong>（写后分析，对自己的作品运行拆文引擎，薄弱点转化为下一轮改进目标）。每个环节结束都有"下一步行动引导"，避免用户看完就走。</p>
+      </div>
+
+      <div class="placeholder-box">
+        建议在此处补充 2-3 张产品界面截图：① X 光片报告页（情绪曲线可视化）② 创作工作台三栏布局 ③ 热门元素雷达热力图。截图非常加分，评审一眼看懂产品形态。
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 创作思路 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div class="section-title">Demo 创作思路</div>
+    </div>
+    <div class="section-body">
+      <p><strong>灵感来源：</strong>2024 至 2026 年，短篇小说赛道经历了爆发式增长。番茄短篇、知乎盐选、七猫、点众等平台纷纷加码短篇内容，创作者数量快速增长，但淘汰率极高——大量新手写三五篇没流量就放弃了。核心矛盾在于：优质短篇的需求远大于供给，但创作者从入门到能产出合格作品的成长曲线太长。</p>
+
+      <p><strong>想解决的问题：</strong>创作者面临四个贯穿创作全流程的痛点——</p>
+      <p>① <strong>拆文没有系统方法</strong>：靠"感觉"拆解不可复制，拆完也不知道该怎么用</p>
+      <p>② <strong>不知道当下什么题材有流量</strong>：盲目创作，踩不中风口</p>
+      <p>③ <strong>素材零散存在各个文档里</strong>：用的时候找不到，也没有结构化检索</p>
+      <p>④ <strong>写完不知道结构哪里有问题</strong>：缺乏专业编辑反馈，改进靠试错</p>
+
+      <p style="margin-top:16px"><strong>为什么做这个方向：</strong>市面上已有不少 AI 写作工具，但存在两个结构性问题。</p>
+      <p>一是<strong>几乎全部聚焦在"帮用户写"</strong>——AI 续写、润色、生成大纲，不解决"怎么写好"的根本问题。创作者用了这些工具，文字是产出了，但结构意识没有提升，下一篇还是会犯同样的错。</p>
+      <p>二是<strong>各工具割裂</strong>——拆文工具不管创作，创作工具不管分析，素材工具不管趋势。创作者需要在多个工具间来回切换，创作流程被打断。</p>
+      <p>InkSight 的切入点是：<strong>不替创作者写，而是构建一个从拆文学习、趋势发现、素材积累到创作实践的完整闭环</strong>，让创作者在一个平台内跑完"学—察—集—创—磨"的完整一圈。教练不替你上场踢球，但他帮你分析对手录像、拆解战术、收集情报、制定训练计划，然后看着你上场、赛后复盘。</p>
+    </div>
+  </div>
+
+  <!-- 3. 体验地址 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div class="section-title">Demo 体验地址</div>
+    </div>
+    <div class="section-body">
+      <div class="placeholder-box">
+        请在此处补充你的体验链接（三选一）：<br><br>
+        方式一：部署随时可公开访问的体验链接（推荐，如 Zeabur / Vercel 部署后的 URL）<br>
+        方式二：将交互式 HTML 格式文件用 Zip 打包上传到社区<br>
+        方式三：硬件赛道可用演示视频替代（本项目不适用）<br><br>
+        建议格式：[https://你的部署域名/](https://你的部署域名/)
+      </div>
+      <p>体验路径建议：首页 → 上传一篇短篇小说 → 查看 X 光片报告 → 浏览热门元素雷达 → 进入素材库 → 开始创作 → 写后分析。完整的闭环体验约需 5-10 分钟。</p>
+      <p>登录账户由管理员分配。首次体验可直接在首页输入框上传小说文本或文件开始拆文分析。</p>
+    </div>
+  </div>
+
+  <!-- 4. TRAE 实践过程 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-title">TRAE 实践过程</div>
+    </div>
+    <div class="section-body">
+      <p>整个项目从零开始，使用 TRAE IDE 完成 7 个阶段、72 个任务的全流程开发。以下是完整的开发流程：</p>
+
+      <!-- Phase 0 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第一阶段：技术选型与管线骨架</span>
+          <span class="phase-tag">Phase 0 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <p>对 TRAE 描述了产品愿景（"学—察—集—创—磨"五个字的创作闭环），TRAE 帮我完成了全部基础设施搭建：</p>
+          <ul>
+            <li>技术选型：Next.js 14 + TypeScript + Tailwind CSS + SQLite（better-sqlite3）</li>
+            <li>项目脚手架：路由结构、API 层、组件目录、工具库分层</li>
+            <li>LLM 接入层：统一客户端封装，支持多模型切换与重试控制</li>
+            <li>14 维度 Zod Schema：骨架层 5 维 + 血肉层 5 维 + 风格层 4 维的强类型定义</li>
+            <li>拆解 Prompt：强约束 JSON 输出，每个维度附带原文证据引用</li>
+            <li>5 篇测试集：覆盖悬疑 / 言情 / 氛围 / 动作 / 混合五种类型</li>
+          </ul>
+          <p style="margin-top:8px"><strong>产出：</strong>一个能跑通的拆解管线，输入小说文本 → 输出 14 维度结构化 JSON。</p>
+        </div>
+      </div>
+
+      <!-- Phase 1 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第二阶段：诊断引擎与处方生成</span>
+          <span class="phase-tag">Phase 1 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <p>基于拆解结果，构建三步反馈管线：</p>
+          <ul>
+            <li>诊断引擎：规则引擎比对同类型基准数据，自动识别 2-3 个结构薄弱点和 1-2 个提升机会，每个诊断点附偏差百分比和严重程度评分</li>
+            <li>反直觉发现：对比创作者自评与分析结果的最大偏差点，识别"创作者自己可能没意识到的结构特征"</li>
+            <li>处方生成：针对每个薄弱点生成 2-3 个方向的修改建议，遵循"不替写 / 不给唯一答案 / 不评判"三不原则，每个方向附适配性评分（1-5 分）</li>
+            <li>降级机制：LLM 输出异常时重试，处方超时时先展示拆解 + 诊断、处方异步加载</li>
+          </ul>
+          <p style="margin-top:8px"><strong>产出：</strong>从"拆解"到"诊断"到"处方"的完整反馈链路。</p>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第三阶段：X 光片报告与前端界面</span>
+          <span class="phase-tag">Phase 2 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <p>构建四区域可视化报告页面和完整的用户交互链路：</p>
+          <ul>
+            <li>X 光片报告：总览卡片（一句话总评 + 反直觉发现）、情绪曲线双线叠加可视化（标记点 + 点击跳转原文）、结构图谱、维度详情折叠卡</li>
+            <li>上传页：文件拖拽上传，支持全格式（mammoth 解 docx + pdfjs-dist 解 pdf + 文本类直读 + 二进制兜底）</li>
+            <li>拆解进度页：展示分析进度条（识别类型 → 分析钩子 → 绘制情绪曲线 → 生成反馈）</li>
+            <li>原文联动：点击情绪曲线节点或处方段落引用，原文区自动滚动并高亮</li>
+            <li>埋点系统：对齐 PRD 14 个关键事件（上传 / 分析完成 / 建议采纳 / 素材收藏等）</li>
+            <li>报告导出：支持 Markdown 和 PDF 导出</li>
+          </ul>
+          <p style="margin-top:8px"><strong>产出：</strong>完整的 upload → analyzing → report 交互链路，P0 功能可演示。</p>
+        </div>
+      </div>
+
+      <!-- Phase 3 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第四阶段：基准库与双篇对比</span>
+          <span class="phase-tag">Phase 3 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <ul>
+            <li>批量拆解脚本：三模式（真实 LLM / 合成数据 / 跳过 LLM），支持批量处理 100+ 篇文章</li>
+            <li>基准数据聚合：共享指标提取逻辑，聚合生成同类型基准 JSON</li>
+            <li>双篇对比 UI：概览卡片 + 三幕对比条 + 19 维差异表 + 情绪曲线双线叠加 + 反转时间线对比</li>
+            <li>一致性监控：5×2 测试集自动跑拆解一致性，总体一致性 96.8% 达标（阈值 >85%）</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Phase 4 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第五阶段：热门元素雷达与素材库</span>
+          <span class="phase-tag">Phase 4 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <p>补齐闭环的"察"和"集"两个环节：</p>
+          <ul>
+            <li>趋势热力图：题材 × 元素矩阵热力图，4 档热度色阶，支持平台筛选和时间回溯</li>
+            <li>题材生命周期：四阶段算法（萌芽 / 爆发 / 平台 / 衰退），7 天增长率 + 30 天均值阈值</li>
+            <li>趋势元素详情卡：热度走势 SVG 折线图 + 跨平台分布条形图 + 常见搭配 Top 5 + 一键收藏到素材库</li>
+            <li>三层素材库：原子素材 / 组件素材 / 灵感素材，支持拆文自动提取 5 类结构模式</li>
+            <li>TF-IDF 语义搜索：N-gram 中文分词 + 余弦相似度 + 关键词降级兜底，支持类型 / 情绪 / 结构三维筛选</li>
+            <li>LLM 辅助标签分类：批量分类管线 + Zod 校验 + 规则版降级，题材聚类匹配 96.7% 达标</li>
+            <li>合规评估：实抓 4 平台 robots.txt，完成法律风险评估，当前阶段维持 Mock-First</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Phase 5 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第六阶段：创作工作台</span>
+          <span class="phase-tag">Phase 5 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <p>闭环的"创"和"磨"环节，这是产品最核心的体验：</p>
+          <ul>
+            <li>编辑器内核：contentEditable 富文本 + 自动保存（30s / 失焦）+ 字数统计 + 章节分隔</li>
+            <li>段落编号：CSS counter 非侵入式编号，与拆文分析段落体系一致</li>
+            <li>结构大纲：空白模板 / 从拆文结果自动生成大纲模板</li>
+            <li>结构参考线：左侧淡色标注三幕边界和反转节点位置</li>
+            <li>实时结构提示：底部条显示三幕进度 / 当前段落类型 / 反转距离，距反转 <5% 变淡黄提示</li>
+            <li>素材侧栏：主动推荐（光标位置情境检测：开头 / 反转附近 / 对话密集）+ 手动搜索 + 拖拽收藏</li>
+            <li>写后分析：提取编辑器文本 → 调用拆文引擎 → 生成 X 光片报告</li>
+            <li>空格唤起 AI 对话：编辑器空白处按空格，弹出输入条，支持模型选择 + 直接生成场景文本插入编辑器</li>
+          </ul>
+          <p style="margin-top:8px"><strong>产出：</strong>完整的三栏创作环境，从大纲搭建到写后分析的端到端体验。</p>
+        </div>
+      </div>
+
+      <!-- Phase 6 -->
+      <div class="phase-block">
+        <div class="phase-header">
+          <span class="phase-name">第七阶段：闭环优化与系统加固</span>
+          <span class="phase-tag">Phase 6 · 完成</span>
+        </div>
+        <div class="phase-body">
+          <ul>
+            <li>闭环仪表盘：北极星指标（月活完成闭环次数）+ 五模块指标卡 + 闭环漏斗可视化，无数据时全量展示零值</li>
+            <li>个性化推荐：基于用户行为推断四阶段画像（ newcomer / learner / creator / looped），驱动拆文推荐和素材推荐</li>
+            <li>鉴权系统：Cookie + JWT（jose HS256）无状态会话 + bcryptjs 密码哈希 + 角色权限（admin / experience）+ 账户管理 CRUD</li>
+            <li>作品管理：作品列表 + 销售状态追踪（¥ 印章式标记已售）+ 千字单价联动计算 + 月度统计 + 筛选标签</li>
+            <li>AI 模型管理：可视化模型配置 + 日志查询 + 多模型切换</li>
+            <li>性能优化：next/dynamic 拆分首屏体积 -49%、事件埋点 in-memory buffer + debounce、LLM 超时 30s race 包装</li>
+            <li>导航断点修复：首页 → 上传 → 拆解 → 报告 → 创作 / 趋势 / 素材 / 对比 → 回首页，全链路可达</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 截图占位 -->
+      <div class="placeholder-box">
+        请补充不少于 3 张开发关键步骤截图。建议选择：<br>
+        ① TRAE 中拆文引擎 Prompt 调试与 JSON 输出验证的对话截图<br>
+        ② TRAE 中创作工作台三栏布局 + 空格唤起 AI 对话的开发过程截图<br>
+        ③ TRAE 中闭环仪表盘或鉴权系统的实现对话截图<br>
+        双击 TRAE 的对话头像可复制 Session ID。
+      </div>
+
+      <!-- Session ID 占位 -->
+      <div class="placeholder-box">
+        请补充不少于 3 个关键任务的 Session ID。双击 TRAE 的对话头像即可复制。<br>
+        建议选择以下关键节点的 Session：<br>
+        ① 第一阶段管线骨架搭建（Phase 0）<br>
+        ② 第五阶段创作工作台开发（Phase 5）<br>
+        ③ 第七阶段鉴权系统或闭环优化（Phase 6）<br><br>
+        格式参考：<br>
+        Session ID 1: [你的 Session ID]<br>
+        Session ID 2: [你的 Session ID]<br>
+        Session ID 3: [你的 Session ID]
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 报名帖链接 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div class="section-title">对应的报名审核通过的帖子链接</div>
+    </div>
+    <div class="section-body">
+      <div class="placeholder-box">
+        请补充你已通过审核的社区报名帖链接。<br>
+        格式参考：[【学习工作赛道】你的报名帖标题 - TRAE AI 创造力大赛 / 【大赛报名专区】 - TRAE 官方中文社区](https://forum.trae.cn/t/topic/你的帖子编号)
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部说明 -->
+  <div class="footer-note">
+    <strong>使用说明：</strong>本文档为初赛参赛帖内容草稿，已基于 InkSight 项目已实现的功能撰写完成。<br><br>
+    <strong>需要你自行补充的内容（共 4 项）：</strong><br>
+    1. <strong>产品截图</strong>（第 1 部分）：2-3 张产品界面截图<br>
+    2. <strong>体验地址</strong>（第 3 部分）：部署后的公开访问链接<br>
+    3. <strong>开发截图 + Session ID</strong>（第 4 部分）：不少于 3 张截图 + 3 个 Session ID<br>
+    4. <strong>报名帖链接</strong>（第 5 部分）：已通过审核的报名帖 URL<br><br>
+    <strong>发帖步骤：</strong>进入初赛专区 → 新建话题 → 标签选「学习工作」→ 标题填「【学习工作赛道】InkSight — 短篇小说 AI 创作教练」→ 将本文档各部分内容复制到正文 → 补充上述 4 项内容 → 发布。
+  </div>
+
+</div>
+</body>
+</html>

@@ -42,7 +42,8 @@ export type CoachInputProps = {
     text: string,
     files?: UploadedFile[],
     model?: string,
-    skills?: SkillRef[]
+    skills?: SkillRef[],
+    onAccepted?: () => void
   ) => void | boolean | Promise<void | boolean>;
   quickTags?: { label: string; onClick: () => void }[];
   compact?: boolean;
@@ -82,6 +83,8 @@ export function CoachInput({
   conversation = false,
 }: CoachInputProps) {
   const [submitting, setSubmitting] = useState(false);
+  const submissionLock = useRef(false);
+  const [awaitingAcceptance, setAwaitingAcceptance] = useState(false);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -164,16 +167,26 @@ export function CoachInput({
   }, [skillMenuOpen]);
 
   const submit = async () => {
-    if (disabled || submitting || parsing) return;
+    if (disabled || submissionLock.current || parsing) return;
     const trimmed = text.trim();
     if (!trimmed && files.length === 0 && skills.length === 0) return;
+    submissionLock.current = true;
     setSubmitting(true);
+    setAwaitingAcceptance(true);
+    setParseError(null);
+    let acknowledged = false;
+    const acknowledge = () => {
+      if (acknowledged) return;
+      acknowledged = true;
+      setText(""); setFiles([]); setSkills([]);
+      setAwaitingAcceptance(false);
+    };
     try {
-      const accepted = await onSubmit?.(trimmed, files, model, skills);
-      if (accepted === true) { setText(""); setFiles([]); setSkills([]); }
+      const accepted = await onSubmit?.(trimmed, files, model, skills, acknowledge);
+      if (accepted === true) acknowledge();
     } catch (error) {
       setParseError(error instanceof Error ? error.message : "发送失败，输入已保留");
-    } finally { setSubmitting(false); }
+    } finally { submissionLock.current = false; setSubmitting(false); setAwaitingAcceptance(false); }
   };
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -331,6 +344,7 @@ export function CoachInput({
         </div>
       )}
 
+      {awaitingAcceptance && <p role="status" className="mb-2 text-xs text-text-muted">正在发送…</p>}
       <form onSubmit={handleSubmit}>
         <div
           onDrop={handleDrop}
